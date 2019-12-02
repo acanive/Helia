@@ -1,0 +1,71 @@
+# German translations for helia package.
+# Copyright (C) 2018 THE helia'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the helia package.
+# <martin.gansser@gmail.com>, 2019.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: helia 8.2\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-08-09 20:53+0300\n"
+"PO-Revision-Date: 2018-05-21 08:01+0300\n"
+"Last-Translator: <martin.gansser@gmail.com>\n"
+"Language-Team: German\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
+"%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: ../src/lang.c:18
+msgid "Audio equalizer"
+msgstr "Audio-Equalizer"
+
+#: ../src/lang.c:19
+msgid "Bandwidth Hz"
+msgstr "Bandbreite Hz"
+
+#: ../src/lang.c:20
+msgid "Brightness"
+msgstr "Helligkeit"
+
+#: ../src/lang.c:21
+msgid "Channels"
+msgstr "Kanäle"
+
+#: ../src/lang.c:22
+msgid "Contrast"
+msgstr "Kontrast"
+
+#: ../src/lang.c:23
+msgid "Files"
+msgstr "Dateien"
+
+#: ../src/lang.c:24
+msgid "Frequency Hz"
+msgstr "Frequenz Hz"
+
+#: ../src/lang.c:25
+msgid "Hue"
+msgstr "Farbton"
+
+#: ../src/lang.c:26
+msgid "Level dB"
+msgstr "Pegel dB"
+
+#: ../src/lang.c:27
+msgid "Saturation"
+msgstr "Sättigung"
+
+#: ../src/lang.c:28
+msgid "Scanner"
+msgstr "Scanner"
+
+#: ../src/lang.c:29
+msgid "Undefined"
+msgstr "Nicht definiert"
+
+#: ../src/lang.c:30
+msgid "Video equalizer"
+msgstr "Video-Equalizer"
