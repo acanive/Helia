@@ -1,27 +1,7 @@
 project(
   'helia', 'c',
-  version: '9.9'
+  version: '10.0'
 )
-
-
-gettext_option = get_option('enable-gettext')
-if gettext_option
-
-common_flags = [
-  '-DUSE_GETTEXT',
-  '-DGETTEXT_PACKAGE=helia'
-]
-
-  i18n = import('i18n')
-  subdir('po')
-
-  po_dir = join_paths(meson.source_root(), 'po')
-
-  add_project_arguments(common_flags, language: 'c')
-  message('** Using the Gettext')
-
-endif
-
 
 helia_prefix = get_option('prefix')
 helia_bindir = join_paths(helia_prefix, get_option('bindir'))
@@ -43,24 +23,39 @@ res = gnome.compile_resources(
 	source_dir: 'build'
 )
 
+common_flags = [
+  '-DUSE_GETTEXT',
+  '-DGETTEXT_PACKAGE=helia'
+]
+
+i18n = import('i18n')
+
+po_dir = join_paths(meson.source_root(), 'po')
+
+add_project_arguments(common_flags, language: 'c')
+
+subdir('po')
+
 src = [
-	'src/base.c',
-	'src/dtv-gst.c',
-	'src/dtv-level.c',
-	'src/dtv-panel.c',
-	'src/dtv-win.c',
+	'src/helia.c',
 	'src/helia-eqa.c',
 	'src/helia-eqv.c',
-	'src/info.c',
-	'src/lang.c',
-	'src/mpegts.c',
-	'src/player-gst.c',
-	'src/player-panel.c',
-	'src/player-slider.c',
-	'src/player-win.c',
-	'src/pref.c',
-	'src/scan.c',
-	'src/tree-view.c',
+	'src/helia-gst.c',
+	'src/helia-info.c',
+	'src/helia-keyboard.c',
+	'src/helia-lang.c',
+	'src/helia-level.c',
+	'src/helia-location.c',
+	'src/helia-list.c',
+	'src/helia-mpegts.c',
+	'src/helia-panel.c',
+	'src/helia-pref.c',
+	'src/helia-panel-treeview.c',
+	'src/helia-scan.c',
+	'src/helia-slider.c',
+	'src/helia-treeview.c',
+	'src/helia-video.c',
+	'src/helia-window.c',
 	res
 ]
 

@@ -2,7 +2,7 @@
 
 * [Gstreamer 1.0](https://gstreamer.freedesktop.org/src/)
 * [Netstat](http://sourceforge.net/projects/net-tools/)
-
+* gstreamer-tools ( or gstreamer-utils )
 
 #### Multifrontend
 ##### GstDvbSrc & multifrontend

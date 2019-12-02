@@ -7,9 +7,7 @@
 */
 
 
-#include <base.h>
-
-#include "lang.h"
+#include <helia-include.h>
 
 
 #define BAND_N 10
@@ -68,7 +66,7 @@ static void helia_eqa_clear ()
 	helia_eqa_default ();
 }
 
-static void helia_eqa_create_label ( GtkBox *vbox, Base *base )
+static void helia_eqa_create_label ( GtkBox *vbox )
 {
 	GtkBox *hboxl = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 	GtkLabel *label;
@@ -76,7 +74,7 @@ static void helia_eqa_create_label ( GtkBox *vbox, Base *base )
 	uint i = 0;
 	for ( i = 0; i < G_N_ELEMENTS ( eqa_n ); i++ )
 	{
-		label = (GtkLabel *)gtk_label_new ( _i18n_ ( base, eqa_n[i].name ) );
+		label = (GtkLabel *)gtk_label_new ( _i18n_ ( eqa_n[i].name ) );
 		gtk_box_pack_start ( hboxl, GTK_WIDGET ( label ), TRUE, TRUE, 10 );
 	}
 
@@ -96,16 +94,12 @@ static GtkScale * helia_eqa_create_scale_g_f_b ( GtkBox *scales_hbox, gdouble g_
 	return widget;
 }
 
-void helia_eqa_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Base *base )
+void helia_eqa_win ( GstElement *element, Helia *helia )
 {
+	GtkWindow *window = helia_create_window_top ( helia->window, _i18n_ ( "Audio equalizer" ), "helia-eqa", GTK_WIN_POS_CENTER_ON_PARENT, TRUE );
+
 	GtkBox *vbox_main, *vbox, *h_box;
 	GtkScale *widget;
-
-	GtkWindow *window_eq_audio = (GtkWindow *)gtk_window_new ( GTK_WINDOW_TOPLEVEL );
-	gtk_window_set_transient_for ( window_eq_audio, parent );
-	gtk_window_set_title    ( window_eq_audio, _i18n_ ( base, "Audio equalizer" ) );
-	gtk_window_set_modal    ( window_eq_audio, TRUE );
-	gtk_window_set_position ( window_eq_audio, GTK_WIN_POS_CENTER_ON_PARENT );
 
 	vbox_main = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 	gtk_widget_set_margin_top    ( GTK_WIDGET ( vbox_main ), 10 );
@@ -114,7 +108,7 @@ void helia_eqa_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Ba
 
 	vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 
-	helia_eqa_create_label ( vbox_main, base );
+	helia_eqa_create_label ( vbox_main );
 
 	g_object_set ( G_OBJECT ( element ), "num-bands", BAND_N, NULL );
 
@@ -151,22 +145,22 @@ void helia_eqa_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Ba
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 	gtk_box_set_spacing ( h_box, 10 );
 
-	GtkButton *button = base_set_image_button ( "helia-clear", 16 );
+	GtkButton *button = helia_set_image_button ( "helia-clear", 16 );
 	g_signal_connect ( button, "clicked", G_CALLBACK ( helia_eqa_clear ), NULL );
 
 	gtk_box_pack_start ( h_box, GTK_WIDGET ( button ), TRUE, TRUE, 0 );
 
-	button = base_set_image_button ( "helia-exit", 16 );
-	g_signal_connect_swapped ( button, "clicked", G_CALLBACK ( gtk_widget_destroy ), window_eq_audio );
+	button = helia_set_image_button ( "helia-exit", 16 );
+	g_signal_connect_swapped ( button, "clicked", G_CALLBACK ( gtk_widget_destroy ), window );
 
 	gtk_box_pack_start ( h_box, GTK_WIDGET ( button ), TRUE, TRUE, 0 );
 
 	gtk_box_pack_start ( vbox_main, GTK_WIDGET ( h_box ), FALSE, FALSE, 10 );
 
-	gtk_container_add ( GTK_CONTAINER ( window_eq_audio ), GTK_WIDGET ( vbox_main ) );
+	gtk_container_add ( GTK_CONTAINER ( window ), GTK_WIDGET ( vbox_main ) );
 	gtk_container_set_border_width ( GTK_CONTAINER ( vbox_main ), 0 );
 
-	gtk_widget_show_all ( GTK_WIDGET ( window_eq_audio ) );
+	gtk_widget_show_all ( GTK_WIDGET ( window ) );
 
-	gtk_widget_set_opacity ( GTK_WIDGET ( window_eq_audio ), opacity );
+	gtk_widget_set_opacity ( GTK_WIDGET ( window ), helia->opacity_eqav );
 }

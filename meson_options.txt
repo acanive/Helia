@@ -1,1 +1,0 @@
-option('enable-gettext', type: 'boolean', value: false, description: 'use gettext')

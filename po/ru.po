@@ -1,0 +1,75 @@
+# Russian translations for helia package.
+# Copyright (C) 2018 THE helia'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the helia package.
+# <antohami@altlinux.org>, 2018.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: helia 10.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-11-20 11:59+0200\n"
+"PO-Revision-Date: 2019-11-06 21:39+0200\n"
+"Last-Translator: <antohami@altlinux.org>\n"
+"Language-Team: Russian\n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
+"%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: ../src/helia-lang.c:17
+msgid "Audio equalizer"
+msgstr "Аудио эквалайзер"
+
+#: ../src/helia-lang.c:18
+msgid "Bandwidth Hz"
+msgstr "Полоса  Hz"
+
+#: ../src/helia-lang.c:19
+msgid "Brightness"
+msgstr "Яркость"
+
+#: ../src/helia-lang.c:20
+msgid "Channels"
+msgstr "Каналы"
+
+#: ../src/helia-lang.c:21
+msgid "Contrast"
+msgstr "Контрастность"
+
+#: ../src/helia-lang.c:22
+msgid "Files"
+msgstr "Файлы"
+
+#: ../src/helia-lang.c:23
+msgid "Frequency Hz"
+msgstr "Частота  Hz"
+
+#: ../src/helia-lang.c:24
+msgid "Hue"
+msgstr "Оттенок"
+
+#: ../src/helia-lang.c:25
+msgid "Level dB"
+msgstr "Уровень  dB"
+
+#: ../src/helia-lang.c:30
+msgid "Only IPTV."
+msgstr "Только IPTV."
+
+#: ../src/helia-lang.c:26
+msgid "Saturation"
+msgstr "Насыщенность"
+
+#: ../src/helia-lang.c:27
+msgid "Scanner"
+msgstr "Сканер"
+
+#: ../src/helia-lang.c:28
+msgid "Undefined"
+msgstr "Не определено"
+
+#: ../src/helia-lang.c:29
+msgid "Video equalizer"
+msgstr "Видео эквалайзер"

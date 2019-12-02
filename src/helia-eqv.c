@@ -7,9 +7,7 @@
 */
 
 
-#include <base.h>
-
-#include "lang.h"
+#include <helia-include.h>
 
 
 static struct GstEQVideoData { const char *name; const char *desc; } eqv_n[] =
@@ -58,16 +56,12 @@ static void helia_eqv_clear_one ( G_GNUC_UNUSED GtkToolItem *item, GtkScale *sca
 	gtk_range_set_value ( GTK_RANGE ( scale ), 0.0 );
 }
 
-void helia_eqv_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Base *base )
+void helia_eqv_win ( GstElement *element, Helia *helia )
 {
+	GtkWindow *window = helia_create_window_top ( helia->window, _i18n_ ( "Video equalizer" ), "helia-eqv", GTK_WIN_POS_CENTER_ON_PARENT, TRUE );
+
 	GtkBox *m_box, *h_box;
 	GtkLabel *name_label;
-
-	GtkWindow *window_eq_video = (GtkWindow *)gtk_window_new ( GTK_WINDOW_TOPLEVEL );
-	gtk_window_set_transient_for ( window_eq_video, parent );
-	gtk_window_set_title    ( window_eq_video, _i18n_ ( base, "Video equalizer" ) );
-	gtk_window_set_modal    ( window_eq_video, TRUE );
-	gtk_window_set_position ( window_eq_video, GTK_WIN_POS_CENTER_ON_PARENT );
 
 	m_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 	gtk_widget_set_margin_top    ( GTK_WIDGET ( m_box ), 10 );
@@ -77,7 +71,7 @@ void helia_eqv_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Ba
 	uint c = 0;
 	for ( c = 0; c < G_N_ELEMENTS ( eqv_n ); c++ )
 	{
-		name_label = (GtkLabel *)gtk_label_new ( _i18n_ ( base, eqv_n[c].name ) );
+		name_label = (GtkLabel *)gtk_label_new ( _i18n_ ( eqv_n[c].name ) );
 		gtk_widget_set_halign ( GTK_WIDGET ( name_label ), GTK_ALIGN_START );
 
 		gdouble val = 0;
@@ -112,7 +106,7 @@ void helia_eqv_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Ba
 		gtk_box_pack_start ( hm_box, GTK_WIDGET (all_label[c]), FALSE, FALSE, 0 );
 		gtk_box_pack_start ( hm_box, GTK_WIDGET (scales_hbox),  TRUE, TRUE, 0 );
 
-		GtkButton *button = base_set_image_button ( "helia-clear", 16 );		
+		GtkButton *button = helia_set_image_button ( "helia-clear", 16 );
 		g_signal_connect ( button, "clicked", G_CALLBACK ( helia_eqv_clear_one ), GTK_WIDGET ( all_scale[c] ) );
 		gtk_box_pack_start ( hm_box,  GTK_WIDGET ( button ), FALSE,  FALSE, 0 );
 
@@ -122,22 +116,22 @@ void helia_eqv_win ( GstElement *element, GtkWindow *parent, gdouble opacity, Ba
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 	gtk_box_set_spacing ( h_box, 10 );
 
-	GtkButton *button = base_set_image_button ( "helia-clear", 16 );
+	GtkButton *button = helia_set_image_button ( "helia-clear", 16 );
 	g_signal_connect ( button, "clicked", G_CALLBACK ( helia_eqv_clear ), NULL );
 
 	gtk_box_pack_start ( h_box, GTK_WIDGET ( button ), TRUE, TRUE, 0 );
 
-	button = base_set_image_button ( "helia-exit", 16 );
-	g_signal_connect_swapped ( button, "clicked", G_CALLBACK ( gtk_widget_destroy ), window_eq_video );
+	button = helia_set_image_button ( "helia-exit", 16 );
+	g_signal_connect_swapped ( button, "clicked", G_CALLBACK ( gtk_widget_destroy ), window );
 
 	gtk_box_pack_start ( h_box, GTK_WIDGET ( button ), TRUE, TRUE, 0 );
 
 	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 10 );
 
-	gtk_container_add ( GTK_CONTAINER ( window_eq_video ), GTK_WIDGET ( m_box ) );
+	gtk_container_add ( GTK_CONTAINER ( window ), GTK_WIDGET ( m_box ) );
 	gtk_container_set_border_width ( GTK_CONTAINER ( m_box ), 5 );
 
-	gtk_widget_show_all ( GTK_WIDGET ( window_eq_video ) );
+	gtk_widget_show_all ( GTK_WIDGET ( window ) );
 
-	gtk_widget_set_opacity ( GTK_WIDGET ( window_eq_video ), opacity );
+	gtk_widget_set_opacity ( GTK_WIDGET ( window ), helia->opacity_eqav );
 }
