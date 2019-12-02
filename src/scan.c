@@ -107,13 +107,90 @@ struct DvbDescrGstParam { const char *name; const char *dvb_v5_name; const char 
 };
 
 
-void set_lnb_low_high_switch ( GstElement *element, int type_lnb )
+
+static uint get_lnb_low_high_switch ( GstElement *element, const char *param )
 {
-	g_object_set ( element, "lnb-lof1", lnb_type_lhs_n[type_lnb].low_val,    NULL );
-	g_object_set ( element, "lnb-lof2", lnb_type_lhs_n[type_lnb].high_val,   NULL );
-	g_object_set ( element, "lnb-slof", lnb_type_lhs_n[type_lnb].switch_val, NULL );
+	uint freq = 0;
+
+	g_object_get ( element, param, &freq, NULL );
+
+	return freq / 1000;
 }
 
+static void lnb_win_changed_spin_all ( GtkSpinButton *button, GstElement *element )
+{
+	gtk_spin_button_update ( button );
+
+	uint freq = gtk_spin_button_get_value ( button );
+
+	g_object_set ( element, gtk_widget_get_name ( GTK_WIDGET ( button ) ), freq *= 1000, NULL );
+}
+
+static void lnb_win_set_low_high_switch ( G_GNUC_UNUSED GtkButton *button, Base *base )
+{
+	GtkWindow *window =      (GtkWindow *)gtk_window_new ( GTK_WINDOW_TOPLEVEL );
+	gtk_window_set_transient_for ( window, base->window );
+	gtk_window_set_modal     ( window, TRUE );
+	gtk_window_set_position  ( window, GTK_WIN_POS_CENTER_ON_PARENT );
+	gtk_window_set_title     ( window, "" );
+	gtk_window_set_default_size ( window, 400, -1 );
+
+	GstElement *element = base->dtv->scan.scan_dvbsrc;
+
+	GtkBox *m_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+
+	GtkGrid *grid = (GtkGrid *)gtk_grid_new();
+	gtk_grid_set_column_homogeneous ( GTK_GRID ( grid ), TRUE );
+	gtk_grid_set_row_spacing ( grid, 5 );
+	gtk_box_pack_start ( m_box, GTK_WIDGET ( grid ), TRUE, TRUE, 10 );
+
+	struct data_a { const char *text; const char *name; uint value; } data_a_n[] =
+	{
+		{ "LNB LOf1   MHz", "lnb-lof1", get_lnb_low_high_switch ( element, "lnb-lof1" ) },
+		{ "LNB LOf2   MHz", "lnb-lof2", get_lnb_low_high_switch ( element, "lnb-lof2" ) },
+		{ "LNB Switch MHz", "lnb-slof", get_lnb_low_high_switch ( element, "lnb-slof" ) }
+	};
+
+	uint d = 0;
+	for ( d = 0; d < G_N_ELEMENTS ( data_a_n ); d++ )
+	{
+		GtkLabel *label = (GtkLabel *)gtk_label_new ( data_a_n[d].text );
+		gtk_widget_set_halign ( GTK_WIDGET ( label ), GTK_ALIGN_START );
+		gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( label ), 0, d, 1, 1 );
+
+		GtkSpinButton *spinbutton = (GtkSpinButton *)gtk_spin_button_new_with_range ( lnb_type_lhs_n[LNB_MNL].min_val, lnb_type_lhs_n[LNB_MNL].max_val, 1 );
+		gtk_widget_set_name ( GTK_WIDGET ( spinbutton ), data_a_n[d].name );
+		gtk_spin_button_set_value ( spinbutton, data_a_n[d].value );
+		g_signal_connect ( spinbutton, "changed", G_CALLBACK ( lnb_win_changed_spin_all ), element );
+
+		gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( spinbutton ), 1, d, 1, 1 );
+	}
+
+	GtkButton *button_close = (GtkButton *)gtk_button_new_from_icon_name ( "helia-exit", GTK_ICON_SIZE_BUTTON );
+	g_signal_connect_swapped ( button_close, "clicked", G_CALLBACK ( gtk_widget_destroy ), window );
+
+	gtk_box_pack_end ( m_box, GTK_WIDGET ( button_close ), FALSE, FALSE, 0 );
+
+	gtk_container_set_border_width ( GTK_CONTAINER ( m_box ), 10 );
+	gtk_container_add   ( GTK_CONTAINER ( window ), GTK_WIDGET ( m_box ) );
+	gtk_widget_show_all ( GTK_WIDGET ( window ) );
+
+	gtk_widget_set_opacity ( GTK_WIDGET ( window ), base->opacity_win );
+}
+
+void set_lnb_low_high_switch ( GstElement *element, int type_lnb, gboolean set_scan, G_GNUC_UNUSED Base *base )
+{
+	if ( type_lnb == LNB_MNL )
+	{
+		g_debug ( "%s: %s  LNB_MNL ( num %d ) ", __func__, ( set_scan ) ? "Set" : "Scan", LNB_MNL );
+
+		return;
+	}
+
+	g_object_set ( element, "lnb-lof1", lnb_type_lhs_n[type_lnb].lo1_val,    NULL );
+	g_object_set ( element, "lnb-lof2", lnb_type_lhs_n[type_lnb].lo2_val,    NULL );
+	g_object_set ( element, "lnb-slof", lnb_type_lhs_n[type_lnb].switch_val, NULL );
+}
 
 const char * scan_get_info ( const char *data )
 {
@@ -185,7 +262,7 @@ static void scan_msg_err ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg, Base *bas
 
 	gst_message_parse_error ( msg, &err, &dbg );
 
-	g_critical ( "scan_msg_err:: %s (%s)\n", err->message, (dbg) ? dbg : "no details" );
+	g_critical ( "%s:: %s (%s)\n", __func__, err->message, (dbg) ? dbg : "no details" );
 
 	base_message_dialog ( "", err->message, GTK_MESSAGE_ERROR, base->window );
 
@@ -228,6 +305,7 @@ void scan_gst_create ( Base *base )
 		base->dtv->scan.delsys_set = helia_get_dvb_delsys ( base->dtv->scan.adapter_set, base->dtv->scan.frontend_set );
 
 	base->dtv->scan.lnb_type = 0;
+	base->dtv->scan.id_time_source = 0;
 
 	GstElement *scan_tsparse, *scan_filesink;
 
@@ -237,7 +315,7 @@ void scan_gst_create ( Base *base )
 	scan_filesink		 = gst_element_factory_make ( "filesink", NULL );
 
 	if ( !base->dtv->scan.pipeline_scan || !base->dtv->scan.scan_dvbsrc || !scan_tsparse || !scan_filesink )
-		g_critical ( "scan_gst_create:: pipeline_scan - not be created.\n" );
+		g_critical ( "%s:: pipeline_scan - not be created.\n", __func__ );
 
 	gst_bin_add_many ( GST_BIN ( base->dtv->scan.pipeline_scan ), base->dtv->scan.scan_dvbsrc, scan_tsparse, scan_filesink, NULL );
 	gst_element_link_many ( base->dtv->scan.scan_dvbsrc, scan_tsparse, scan_filesink, NULL );
@@ -292,7 +370,7 @@ static void scan_changed_spin_all ( GtkSpinButton *button, Base *base )
 {
 	gtk_spin_button_update ( button );
 
-	long num = gtk_spin_button_get_value  ( button );
+	long num = gtk_spin_button_get_value ( button );
 	const char *name = gtk_widget_get_name ( GTK_WIDGET ( button ) );
 
 	if ( g_str_has_prefix ( name, "Frequency" ) )
@@ -341,10 +419,13 @@ static void scan_changed_combo_all ( GtkComboBox *combo_box, Base *base )
 	{
 		base->dtv->scan.lnb_type = num;
 
-		set_lnb_low_high_switch ( base->dtv->scan.scan_dvbsrc, num );
+		set_lnb_low_high_switch ( base->dtv->scan.scan_dvbsrc, num, FALSE, base );
 
-		g_debug ( "name %s | set %s: %d ( low %ld | high %ld | switch %ld )", name, lnb_type_lhs_n[num].name, num, 
-				  lnb_type_lhs_n[num].low_val, lnb_type_lhs_n[num].high_val, lnb_type_lhs_n[num].switch_val );
+		gtk_widget_set_sensitive ( GTK_WIDGET ( base->dtv->scan.button_lnb_dvb  ), ( base->dtv->scan.lnb_type == LNB_MNL ) ? TRUE : FALSE );
+		gtk_widget_set_sensitive ( GTK_WIDGET ( base->dtv->scan.button_lnb_isdb ), ( base->dtv->scan.lnb_type == LNB_MNL ) ? TRUE : FALSE );
+
+		g_debug ( "name %s | set %s: %d ( low %ud | high %ud | switch %ud )", name, lnb_type_lhs_n[num].name, num, 
+				  lnb_type_lhs_n[num].lo1_val, lnb_type_lhs_n[num].lo2_val, lnb_type_lhs_n[num].switch_val );
 
 		return;
 	}
@@ -393,7 +474,7 @@ static GtkBox * scan_dvb_all  ( Base *base, uint num, const DvbTypes *dvball, co
 	int d_data = 0, set_freq = 1000000;
 	uint d = 0, c = 0, z = 0;
 
-	if ( g_str_has_prefix ( type, "DVB-S" ) || g_str_has_prefix ( type, "ISDB-S" ) ) set_freq = 1000;
+	if ( g_str_has_prefix ( type, "DVB-S" ) ) set_freq = 1000;
 
 	for ( d = 0; d < num; d++ )
 	{
@@ -470,6 +551,18 @@ static GtkBox * scan_dvb_all  ( Base *base, uint num, const DvbTypes *dvball, co
 		}
 	}
 
+	if ( g_str_has_prefix ( type, "DVB-S" ) )
+	{
+		GtkBox *h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+
+		base->dtv->scan.button_lnb_dvb = (GtkButton *)gtk_button_new_with_label ( "LNB  🤚 " );
+		g_signal_connect ( base->dtv->scan.button_lnb_dvb, "clicked", G_CALLBACK ( lnb_win_set_low_high_switch ), base );
+		gtk_widget_set_sensitive ( GTK_WIDGET ( base->dtv->scan.button_lnb_dvb ), ( base->dtv->scan.lnb_type == LNB_MNL ) ? TRUE : FALSE );
+
+		gtk_box_pack_start ( h_box, GTK_WIDGET ( base->dtv->scan.button_lnb_dvb ), TRUE,  TRUE,   0 );
+		gtk_box_pack_start ( g_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 10 );
+	}
+
 	return g_box;
 }
 static GtkBox * scan_isdb_all  ( Base *base, uint num, const DvbTypes *dvball, const char *type )
@@ -515,7 +608,7 @@ static GtkBox * scan_isdb_all  ( Base *base, uint num, const DvbTypes *dvball, c
 	int d_data = 0, set_freq = 1000000;
 	uint d = 0, c = 0, z = 0, q = 0;
 
-	if ( g_str_has_prefix ( type, "DVB-S" ) || g_str_has_prefix ( type, "ISDB-S" ) ) set_freq = 1000;
+	if ( g_str_has_prefix ( type, "ISDB-S" ) ) set_freq = 1000;
 
 	for ( d = 0; d < num; d++ )
 	{
@@ -580,6 +673,22 @@ static GtkBox * scan_isdb_all  ( Base *base, uint num, const DvbTypes *dvball, c
 					for ( z = 0; z < gst_param_dvb_descr_n[c].cdsc; z++ )
 						gtk_combo_box_text_append_text ( scan_combo_box, gst_param_dvb_descr_n[c].dvb_descr[z].text_vis );
 
+					/*if ( g_str_has_prefix ( dvball[d].param, "Polarity" ) )
+					{
+						char *pol = NULL;
+
+						g_object_get ( base->dtv->scan.scan_dvbsrc, gst_param_dvb_descr_n[c].gst_param, &pol, NULL );
+
+						if ( g_str_has_prefix ( pol, "V" ) || g_str_has_prefix ( pol, "v" ) )
+							gtk_combo_box_set_active ( GTK_COMBO_BOX ( scan_combo_box ), 1 );
+						else
+							gtk_combo_box_set_active ( GTK_COMBO_BOX ( scan_combo_box ), 0 );
+
+						g_free ( pol );
+
+						continue;
+					}*/
+
 					if ( g_str_has_prefix ( dvball[d].param, "LNB" ) )
 						d_data = base->dtv->scan.lnb_type;
 					else
@@ -600,6 +709,18 @@ static GtkBox * scan_isdb_all  ( Base *base, uint num, const DvbTypes *dvball, c
 
 	if ( g_str_has_prefix ( type, "ISDB-T" ) )
 		gtk_box_pack_start ( g_box, GTK_WIDGET ( notebook ), TRUE, TRUE, 10 );
+
+	if ( g_str_has_prefix ( type, "ISDB-S" ) )
+	{
+		GtkBox *h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+
+		base->dtv->scan.button_lnb_isdb = (GtkButton *)gtk_button_new_with_label ( "LNB  🤚 " );
+		g_signal_connect ( base->dtv->scan.button_lnb_isdb, "clicked", G_CALLBACK ( lnb_win_set_low_high_switch ), base );
+		gtk_widget_set_sensitive ( GTK_WIDGET ( base->dtv->scan.button_lnb_isdb ), ( base->dtv->scan.lnb_type == LNB_MNL ) ? TRUE : FALSE );
+
+		gtk_box_pack_start ( h_box, GTK_WIDGET ( base->dtv->scan.button_lnb_isdb ), TRUE,  TRUE,   0 );
+		gtk_box_pack_start ( g_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 10 );
+	}
 
 	return g_box;
 }
@@ -647,7 +768,7 @@ static void treeview_append_base ( GtkTreeView *tree_view, const char *name, con
 
 static void scan_get_tp_data ( Base *base, GString *gstring )
 {
-	uint c = 0, d = 0;
+	uint c = 0, d = 0, l = 0;
 	int  d_data = 0, DVBTYPE = 0;
 
 	g_object_get ( base->dtv->scan.scan_dvbsrc, "delsys", &DVBTYPE, NULL );
@@ -766,6 +887,15 @@ static void scan_get_tp_data ( Base *base, GString *gstring )
 					if ( g_str_has_prefix ( "lnb-type", gst_param_dvb_descr_n[d].gst_param ) )
 					{
 						g_string_append_printf ( gstring, ":%s=%d", "lnb-type", base->dtv->scan.lnb_type );
+
+						const char *lnbf_gst[] = { "lnb-lof1", "lnb-lof2", "lnb-slof" };
+
+						for ( l = 0; l < G_N_ELEMENTS ( lnbf_gst ); l++ )
+						{
+							g_object_get ( base->dtv->scan.scan_dvbsrc, lnbf_gst[l], &d_data, NULL );
+							g_string_append_printf ( gstring, ":%s=%d", lnbf_gst[l], d_data );
+						}
+
 						continue;
 					}
 
@@ -803,6 +933,34 @@ static void scan_get_tp_data ( Base *base, GString *gstring )
 			{
 				if ( g_str_has_suffix ( isdbs_props_n[c].param, gst_param_dvb_descr_n[d].name ) )
 				{
+					/*if ( g_str_has_prefix ( "polarity", gst_param_dvb_descr_n[d].gst_param ) )
+					{
+						char *pol = NULL;
+
+						g_object_get ( base->dtv->scan.scan_dvbsrc, gst_param_dvb_descr_n[d].gst_param, &pol, NULL );
+
+						g_string_append_printf ( gstring, ":polarity=%s", pol );
+
+						g_free ( pol );
+
+						continue;
+					}*/
+
+					if ( g_str_has_prefix ( "lnb-type", gst_param_dvb_descr_n[d].gst_param ) )
+					{
+						g_string_append_printf ( gstring, ":%s=%d", "lnb-type", base->dtv->scan.lnb_type );
+
+						const char *lnbf_gst[] = { "lnb-lof1", "lnb-lof2", "lnb-slof" };
+
+						for ( l = 0; l < G_N_ELEMENTS ( lnbf_gst ); l++ )
+						{
+							g_object_get ( base->dtv->scan.scan_dvbsrc, lnbf_gst[l], &d_data, NULL );
+							g_string_append_printf ( gstring, ":%s=%d", lnbf_gst[l], d_data );
+						}
+
+						continue;
+					}
+
 					g_object_get ( base->dtv->scan.scan_dvbsrc, gst_param_dvb_descr_n[d].gst_param, &d_data, NULL );
 					g_string_append_printf ( gstring, ":%s=%d", gst_param_dvb_descr_n[d].gst_param, d_data );
 
@@ -1048,7 +1206,7 @@ static void helia_strip_dvb5_to_dvbsrc ( Base *base, const char *section, uint n
 			gstring = g_string_new ( ch_name );
 			g_string_append_printf ( gstring, ":delsys=%d:adapter=%d:frontend=%d", base->dtv->scan.delsys_set, base->dtv->scan.adapter_set, base->dtv->scan.frontend_set );
 
-			g_print ( "gmp_convert_dvb5:: Channel: %s ( %d ) \n", lines[n], num );
+			g_print ( "Channel: %s ( %d ) \n", lines[n], num );
 		}
 
 		for ( z = 0; z < G_N_ELEMENTS ( gst_param_dvb_descr_n ); z++ )
@@ -1103,7 +1261,7 @@ static void helia_strip_dvb5_to_dvbsrc ( Base *base, const char *section, uint n
 	g_strfreev ( lines );
 }
 
-static void helia_convert_dvb5 ( Base *base, const char *file )
+void helia_convert_dvb5 ( Base *base, const char *file )
 {
 	uint n = 0;
 	char *contents;
@@ -1131,32 +1289,40 @@ static void helia_convert_dvb5 ( Base *base, const char *file )
 	}
 }
 
-static void convert_file ( G_GNUC_UNUSED GtkButton *button, Base *base )
+static void convert_file ( const char *file, Base *base )
 {
-	const char *text = gtk_entry_get_text ( base->dtv->scan.entry_convert );
-
-	if ( text && g_str_has_suffix ( text, ".conf" ) )
+	if ( file && g_str_has_suffix ( file, "dvb_channel.conf" ) )
 	{
-		if ( g_file_test ( text, G_FILE_TEST_EXISTS ) )
-			helia_convert_dvb5 ( base, text );
+		if ( g_file_test ( file, G_FILE_TEST_EXISTS ) )
+			helia_convert_dvb5 ( base, file );
 		else
-			base_message_dialog ( "", g_strerror ( errno ), GTK_MESSAGE_ERROR, base->window );
+			base_message_dialog ( file, g_strerror ( errno ), GTK_MESSAGE_ERROR, base->window );
 	}
 	else
 	{
-		g_print ( "convert_file:: no convert %s \n", text );
+		g_warning ( "%s:: no convert %s ", __func__, file );
 	}
 }
 
 static void  convert_set_file ( GtkEntry *entry, G_GNUC_UNUSED GtkEntryIconPosition icon_pos, G_GNUC_UNUSED GdkEventButton *event, Base *base )
 {
-	char *file_name = pref_open_file ( base, g_get_home_dir () );
+	if ( icon_pos == GTK_ENTRY_ICON_PRIMARY )
+	{
+		char *file = pref_open_file ( base, g_get_home_dir () );
 
-	if ( file_name == NULL ) return;
+		if ( file == NULL ) return;
 
-	gtk_entry_set_text ( entry, file_name );
+		gtk_entry_set_text ( entry, file );
 
-	g_free ( file_name );
+		g_free ( file );
+	}
+
+	if ( icon_pos == GTK_ENTRY_ICON_SECONDARY )
+	{
+		const char *file = gtk_entry_get_text ( entry );
+
+		convert_file ( file, base );
+	}
 }
 
 static GtkBox * scan_convert ( Base *base )
@@ -1164,24 +1330,259 @@ static GtkBox * scan_convert ( Base *base )
 	GtkBox *g_box  = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 
 	GtkLabel *label = (GtkLabel *)gtk_label_new ( "DVBv5   ⇨  GtvDvb" );
-	gtk_box_pack_start ( g_box, GTK_WIDGET ( label ), FALSE, FALSE, 10 );
+	gtk_box_pack_start ( g_box, GTK_WIDGET ( label ), FALSE, FALSE, 5 );
 
-	//GtkImage *image = base_create_image ( "helia-convert", 48 );
-	//gtk_box_pack_start ( g_box, GTK_WIDGET ( image ), TRUE, TRUE, 0 );
+	GtkEntry *entry = (GtkEntry *)gtk_entry_new ();
+	gtk_entry_set_text ( entry, "dvb_channel.conf" );
 
-	base->dtv->scan.entry_convert = (GtkEntry *)gtk_entry_new ();
-	gtk_entry_set_text ( base->dtv->scan.entry_convert, "dvb_channel.conf" );
+	g_object_set ( entry, "editable", FALSE, NULL );
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_PRIMARY,   "folder" );
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-convert" );
+	g_signal_connect ( entry, "icon-press", G_CALLBACK ( convert_set_file ), base );
 
-	g_object_set ( base->dtv->scan.entry_convert, "editable", FALSE, NULL );
-	gtk_entry_set_icon_from_icon_name ( base->dtv->scan.entry_convert, GTK_ENTRY_ICON_SECONDARY, "folder" );
-	g_signal_connect ( base->dtv->scan.entry_convert, "icon-press", G_CALLBACK ( convert_set_file ), base );
+	gtk_box_pack_start ( g_box, GTK_WIDGET ( entry ), FALSE, FALSE, 5 );
 
-	gtk_box_pack_start ( g_box, GTK_WIDGET ( base->dtv->scan.entry_convert ), FALSE, FALSE, 10 );
+	return g_box;
+}
 
-	GtkButton *button_convert = (GtkButton *)gtk_button_new_from_icon_name ( "helia-convert", GTK_ICON_SIZE_SMALL_TOOLBAR );
-	g_signal_connect ( button_convert, "clicked", G_CALLBACK ( convert_file ), base );
+void initial_scan_genfile ( G_GNUC_UNUSED const char *conf_dir, const char *file_name )
+{
+	struct StrFile { const char *name; const char *name_2; const char *data; } sf_n[] =
+	{
+		{ "Adapter",  "adapter",  "0" },
+		{ "Frontend", "frontend", "0" },
+		{ "Demux",    "demux",    "0" },
+		{ "LNB type ( OFF disable )", "lnb_type", "OFF" }, // UNIVERSAL
+		{ "DISEqC ( -1 disable )", "sat_number", "-1" }
+	};
 
-	gtk_box_pack_start ( g_box, GTK_WIDGET ( button_convert ), FALSE, FALSE, 0 );
+	GString *gstring = g_string_new ( "#!/bin/sh \n\n" );
+
+	uint i = 0;
+	for ( i = 0; i < G_N_ELEMENTS ( sf_n ); i++ )
+	{
+		g_string_append_printf ( gstring, "%s\n\n", "tempfile=`tempfile 2>/dev/null` || tempfile=/tmp/test$$" );
+		g_string_append_printf ( gstring, "%s\n", "dialog --title \" Configure \" \\" );
+		g_string_append_printf ( gstring, "--inputbox \"%s:\" 10 60 \"%s\" 2> $tempfile\n\n", sf_n[i].name, sf_n[i].data );
+		g_string_append_printf ( gstring, "retval=$?\n%s=`cat $tempfile`\nrm -f $tempfile\n\n", sf_n[i].name_2 );
+	}
+
+	g_string_append_printf ( gstring, "%s\n", "if [ $lnb_type   = \"OFF\" ]; then satelite=\"\"; else satelite=\"--lnbf=$lnb_type\"; fi" );
+	g_string_append_printf ( gstring, "%s\n", "if [ $sat_number = \"-1\"  ]; then diseqc=\"\";   else diseqc=\"--sat_number=$sat_number\"; fi\n" );
+
+	g_string_append_printf ( gstring, "%s\n", "start=\"no\"\ndialog --title \"Run?\" \\" );
+	g_string_append_printf ( gstring, "%s\n", "--yesno \"dvbv5-scan --adapter=$adapter --frontend=$frontend --demux=$demux $satelite $diseqc $1\" 10 60" );
+	g_string_append_printf ( gstring, "%s\n", "case \"$?\" in\n'0')\nstart=\"yes\"\n;;\nesac\nrm -f $tempfile\n" );
+
+	g_string_append_printf ( gstring, "%s\n", "if [ $start = \"yes\" ]; then clear; dvbv5-scan --adapter=$adapter --frontend=$frontend --demux=$demux $satelite $diseqc $1; fi\n" );
+
+	GError *err = NULL;
+
+	if ( !g_file_set_contents ( file_name, gstring->str, -1, &err ) )
+	{
+		g_critical ( "%s: %s ", __func__, err->message );
+
+		g_error_free ( err );
+	}
+
+	g_string_free ( gstring, TRUE );
+}
+
+static gboolean initial_scan_run_update ( Base *base )
+{
+	g_debug ( "%s: %d ", __func__, base->dtv->scan.id_time_source );
+
+	gboolean work_script = FALSE, work_scan_v5 = FALSE;
+
+	FILE *d_pipe;
+
+	if ( ( d_pipe = popen ( "ps ax | grep scan-dvbv5.sh", "r" ) ) == NULL )
+	{
+		g_critical ( "%s: Popen Error ", __func__ );
+
+		base->dtv->scan.id_time_source = 0;
+
+		return FALSE;
+	}
+
+	char line[10000];
+
+	while ( fgets ( line, 10000 , d_pipe ) )
+	{
+		if ( g_strrstr ( line, "sh scan-dvbv5.sh" ) ) work_script = TRUE;
+	}
+
+	pclose ( d_pipe );
+
+	if ( ( d_pipe = popen ( "pgrep dvbv5-scan", "r" ) ) == NULL )
+	{
+		g_critical ( "%s: Popen Error ", __func__ );
+
+		base->dtv->scan.id_time_source = 0;
+
+		return FALSE;
+	}
+
+	char line2[256];
+
+	while ( fgets ( line2, 256 , d_pipe ) )
+	{
+		work_scan_v5 = TRUE;
+	}
+
+	pclose ( d_pipe );
+
+	if ( work_script || ( work_script && work_scan_v5 ) )
+	{
+		if ( work_script && work_scan_v5 )
+			g_debug ( "%s: Scan work ", __func__ );
+		else if ( work_script )
+			g_debug ( "%s: Script work ", __func__ );
+
+		return TRUE;
+	}
+	else
+	{
+		static uint count_end = 0;
+
+		char *file_scan = g_strdup_printf ( "%s/helia/dvb_channel.conf", g_get_user_config_dir () );
+
+		if ( g_file_test ( file_scan, G_FILE_TEST_EXISTS ) )
+		{
+			helia_convert_dvb5 ( base, file_scan );
+
+			g_debug ( "%s: scan file convert ", __func__ );
+
+			base->dtv->scan.id_time_source = 0;
+
+			return FALSE;
+		}
+
+		g_free  ( file_scan );
+
+		// if ( base->dtv->scan.scan_quit ) return FALSE;
+
+		if ( count_end >= 3 ) { count_end = 0; base->dtv->scan.id_time_source = 0; return FALSE; } else count_end++;
+	}
+
+	return TRUE;
+}
+
+static void  initial_scan_run ( const char *file, Base *base )
+{
+	const char *dvbv5_scan_shell = "scan-dvbv5.sh";
+
+	char *cmd = g_strdup_printf ( "x-terminal-emulator -e sh %s %s", dvbv5_scan_shell, file );
+
+	GAppInfo *app = g_app_info_create_from_commandline ( cmd, NULL, G_APP_INFO_CREATE_NONE, NULL );
+
+	if ( app )
+	{
+		GError *error = NULL;
+
+		char *cur_dir = g_get_current_dir ();
+		char *dir_conf = g_strdup_printf ( "%s/helia", g_get_user_config_dir () );
+		char *file_path = g_strdup_printf ( "%s/helia/%s", g_get_user_config_dir (), dvbv5_scan_shell );
+		g_chdir ( dir_conf );
+
+		char *file_scan = g_strdup_printf ( "%s/helia/dvb_channel.conf", g_get_user_config_dir () );
+
+		if ( g_file_test ( file_scan, G_FILE_TEST_EXISTS ) ) g_remove ( file_scan );
+
+		if ( !g_file_test ( file_path, G_FILE_TEST_EXISTS ) )
+			initial_scan_genfile ( dir_conf, dvbv5_scan_shell );
+
+		if ( base->dtv->scan.id_time_source == 0 ) g_app_info_launch ( app, NULL, NULL, &error );
+
+		g_chdir ( cur_dir );
+		g_free  ( file_scan );
+		g_free  ( file_path );
+		g_free  ( dir_conf );
+		g_free  ( cur_dir );
+
+		if ( error )
+		{
+			base_message_dialog ( "", error->message, GTK_MESSAGE_ERROR, base->window );
+
+			g_error_free ( error );
+		}
+		else
+		{
+			if ( base->dtv->scan.id_time_source == 0 )
+				base->dtv->scan.id_time_source = g_timeout_add_seconds ( 1, (GSourceFunc)initial_scan_run_update, base );
+			else
+				base_message_dialog ( "Initial scan run.", "", GTK_MESSAGE_INFO, base->window );
+		}
+
+		g_object_unref ( app );
+	}
+
+	g_free ( cmd );
+}
+
+static void  initial_set_file ( GtkEntry *entry, GtkEntryIconPosition icon_pos, G_GNUC_UNUSED GdkEventButton *event, Base *base )
+{
+	const char *dvbv5_scan = "/usr/bin/dvbv5-scan";
+
+	if ( !g_file_test ( dvbv5_scan, G_FILE_TEST_EXISTS ) )
+	{
+		base_message_dialog ( dvbv5_scan, g_strerror ( errno ), GTK_MESSAGE_ERROR, base->window );
+
+		return;
+	}
+
+	const char *dialog = "/usr/bin/dialog";
+
+	if ( !g_file_test ( dialog, G_FILE_TEST_EXISTS ) )
+	{
+		base_message_dialog ( dialog, g_strerror ( errno ), GTK_MESSAGE_ERROR, base->window );
+
+		return;
+	}
+
+	const char *path = g_get_home_dir ();
+
+	if ( g_file_test ( "/usr/share/dvb", G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR ) )
+		path = "/usr/share/dvb";
+
+	if ( icon_pos == GTK_ENTRY_ICON_PRIMARY )
+	{
+		char *file_name = pref_open_file ( base, path );
+
+		if ( file_name == NULL ) return;
+
+		gtk_entry_set_text ( entry, file_name );
+
+		g_free ( file_name );
+	}
+
+	if ( icon_pos == GTK_ENTRY_ICON_SECONDARY )
+	{
+		const char *file_run = gtk_entry_get_text ( entry );
+
+		if ( g_file_test ( file_run, G_FILE_TEST_EXISTS ) )
+			initial_scan_run ( file_run, base );
+		else
+			base_message_dialog ( file_run, g_strerror ( errno ), GTK_MESSAGE_ERROR, base->window );
+	}
+}
+
+static GtkBox * scan_initial ( Base *base )
+{
+	GtkBox *g_box  = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+
+	GtkLabel *label = (GtkLabel *)gtk_label_new ( "Initial  ⇨  DVBv5   ⇨  GtvDvb" );
+	gtk_box_pack_start ( g_box, GTK_WIDGET ( label ), FALSE, FALSE, 5 );
+
+	GtkEntry *entry = (GtkEntry *)gtk_entry_new ();
+	gtk_entry_set_text ( entry, "DVBT2: ua-Kyiv | DVBS2: Sirius-5.0E | DVBC: de-Berlin | ATSC: us-MA-Boston | ISDBT: br-rj-RioDeJaneiro" );
+
+	g_object_set ( entry, "editable", FALSE, NULL );
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_PRIMARY,   "folder" );
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-play" );
+	g_signal_connect ( entry, "icon-press", G_CALLBACK ( initial_set_file ), base );
+
+	gtk_box_pack_start ( g_box, GTK_WIDGET ( entry ), FALSE, FALSE, 5 );
 
 	return g_box;
 }
@@ -1196,12 +1597,12 @@ static GtkBox * scan_device ( Base *base )
 
 	GtkGrid *grid = (GtkGrid *)gtk_grid_new();
 	gtk_grid_set_column_homogeneous ( GTK_GRID ( grid ), TRUE );
+	gtk_grid_set_row_spacing ( grid, 5 );
 	gtk_box_pack_start ( g_box, GTK_WIDGET ( grid ), TRUE, TRUE, 10 );
 
 	struct data_a { const char *text; uint value; void (* activate)(); } data_a_n[] =
 	{
 		{ "DVB Device", 0, NULL },
-		{ "",           0, NULL },
 		{ "Adapter",    base->dtv->scan.adapter_set,  scan_set_adapter  },
 		{ "Frontend",   base->dtv->scan.frontend_set, scan_set_frontend },
 		{ "DelSys",     base->dtv->scan.delsys_set,   scan_set_delsys   }
@@ -1216,7 +1617,7 @@ static GtkBox * scan_device ( Base *base )
 
 		if ( d == 0 ) { base->dtv->scan.dvb_device = label; scan_set_label_device ( base, base->dtv->scan.dvb_device, base->dtv->scan.adapter_set, base->dtv->scan.frontend_set ); }
 
-		if ( d == 2 || d == 3 )
+		if ( d == 1 || d == 2 )
 		{
 			GtkSpinButton *spinbutton = (GtkSpinButton *)gtk_spin_button_new_with_range ( 0, 16, 1 );
 			gtk_spin_button_set_value ( spinbutton, data_a_n[d].value );
@@ -1225,7 +1626,7 @@ static GtkBox * scan_device ( Base *base )
 			gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( spinbutton ), 1, d, 1, 1 );
 		}
 
-		if ( d == 4 )
+		if ( d == 3 )
 		{
 			base->dtv->scan.combo_delsys = (GtkComboBoxText *) gtk_combo_box_text_new ();
 
@@ -1240,6 +1641,8 @@ static GtkBox * scan_device ( Base *base )
 	}
 
 	gtk_box_pack_start ( g_box, GTK_WIDGET ( scan_convert ( base ) ), TRUE, TRUE, 0 );
+
+	gtk_box_pack_start ( g_box, GTK_WIDGET ( scan_initial ( base ) ), TRUE, TRUE, 5 );
 
 	return g_box;
 }
@@ -1268,8 +1671,6 @@ void scan_stop ( G_GNUC_UNUSED GtkButton *button, Base *base )
 
 static void scan_create_control_battons ( Base *base, GtkBox *b_box )
 {
-	gtk_box_pack_start ( b_box, GTK_WIDGET ( gtk_label_new ( " " ) ), TRUE, TRUE, 0 );
-
 	gtk_box_pack_start ( b_box, GTK_WIDGET ( dtv_level_base_scan ( base ) ), FALSE, FALSE, 0 );
 
 	GtkBox *hb_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
@@ -1474,7 +1875,7 @@ void helia_set_dvb_delsys ( uint adapter, uint frontend, uint delsys )
 
 	if ( ( fd = g_open ( fd_name, flags ) ) == -1 )
 	{
-		g_critical ( "helia_set_dvb_delsys: %s %s \n", fd_name, g_strerror ( errno ) );
+		g_critical ( "%s: %s %s \n", __func__, fd_name, g_strerror ( errno ) );
 
 		g_free  ( fd_name );
 
@@ -1513,7 +1914,7 @@ uint helia_get_dvb_delsys ( uint adapter, uint frontend )
 
 		if ( ( fd = g_open ( fd_name, flags ) ) == -1 )
 		{
-			g_critical ( "helia_get_dvb_info: %s %s \n", fd_name, g_strerror ( errno ) );
+			g_critical ( "%s: %s %s \n", __func__, fd_name, g_strerror ( errno ) );
 
 			g_free  ( fd_name );
 
@@ -1550,7 +1951,7 @@ char * helia_get_dvb_info ( Base *base, uint adapter, uint frontend )
 
 		if ( ( fd = g_open ( fd_name, flags ) ) == -1 )
 		{
-			g_critical ( "helia_get_dvb_info: %s %s \n", fd_name, g_strerror ( errno ) );
+			g_critical ( "%s: %s %s \n", __func__, fd_name, g_strerror ( errno ) );
 
 			g_free  ( fd_name );
 

@@ -137,6 +137,13 @@ static Base * base_init ()
 	base->app_quit    = FALSE;
 	base->pause_mouse = FALSE;
 	base->dark_theme  = FALSE;
+	base->rec_enc.rec_enc_prop = FALSE;
+
+	base->rec_enc.str_audio_enc  = g_strdup ( "vorbisenc" );
+	base->rec_enc.str_video_enc  = g_strdup ( "theoraenc" );
+	base->rec_enc.str_muxer_enc  = g_strdup ( "oggmux" );
+	base->rec_enc.str_audio_prop = g_strdup ( "float=quality=0,5" );  // "uint=bitrate=128000"
+	base->rec_enc.str_video_prop = g_strdup ( "int=quality=48" );     // "uint=bitrate=2000"
 
 	base->win_width  = 900;
 	base->win_height = 400;
@@ -179,8 +186,10 @@ static void base_create_player ( Base *base, GtkBox *box )
 	base->player->panel_quit = TRUE;
 	base->player->next_repeat = FALSE;
 	base->player->state_subtitle = TRUE;
-	base->player->record = FALSE;
-	base->player->is_live = FALSE;
+	base->player->record   = FALSE;
+	base->player->record_f = FALSE;
+	base->player->is_live  = FALSE;
+	base->player->set_state  = FALSE;
 	base->player->vis_plugin = FALSE;
 
 	base->player->file_play = NULL;
@@ -210,7 +219,8 @@ static void base_create_dtv ( Base *base, GtkBox *box )
 	base->dtv->panel_quit = TRUE;
 	base->dtv->scrambling = FALSE;
 
-	base->dtv->rec_ses = FALSE;
+	base->dtv->enable_rec = TRUE;
+	base->dtv->rec_ses    = FALSE;
 	base->dtv->rec_status = TRUE;
 	base->dtv->rec_pulse  = FALSE;
 
@@ -372,10 +382,16 @@ static void base_action_files ( G_GNUC_UNUSED GSimpleAction *sl, G_GNUC_UNUSED G
 	if ( gtk_widget_get_visible ( GTK_WIDGET ( mp_vbox ) ) ) dialog_open_files ( base );
 }
 
+static void base_action_net ( G_GNUC_UNUSED GSimpleAction *sl, G_GNUC_UNUSED GVariant *pm, Base *base )
+{
+	if ( gtk_widget_get_visible ( GTK_WIDGET ( mp_vbox ) ) ) win_open_net ( base );
+}
+
 static FuncAction func_action_n[] =
 {	
 	{ base_action_dir,     "add_dir",   GDK_CONTROL_MASK, GDK_KEY_D },
 	{ base_action_files,   "add_files", GDK_CONTROL_MASK, GDK_KEY_O },
+	{ base_action_net,     "add_net",   GDK_CONTROL_MASK, GDK_KEY_L },
 	{ base_action_list,    "playlist",  GDK_CONTROL_MASK, GDK_KEY_H },
 	{ base_action_search,  "search",    GDK_CONTROL_MASK, GDK_KEY_F },
 
@@ -428,7 +444,7 @@ static void base_set ()
 
 static void base_app_quit ( G_GNUC_UNUSED GtkWindow *win, Base *base )
 {
-	g_print ( "base_app_quit \n" );
+	g_debug ( "Helia quit." );
 
 	base->app_quit = TRUE;
 	
@@ -548,7 +564,6 @@ int main ( int argc, char **argv )
 
 #if USE_GETTEXT
 	bindtextdomain ( "helia", "/usr/share/locale" );
-	// bindtextdomain ( "helia", "./build/locale" ); // test gettext
 	bind_textdomain_codeset ( "helia", "UTF-8" );
 	textdomain ( "helia" );
 #endif

@@ -59,7 +59,7 @@ void player_next ( Base *base )
 
 				paly = TRUE;
 
-				g_debug ( "player_next: %s \n", data );
+				g_debug ( "%s: %s ", __func__, data );
 
 				break;
 			}
@@ -107,7 +107,7 @@ static void treeview_to_file ( GtkTreeView *tree_view, const char *filename, gbo
 
 	if ( !g_file_set_contents ( filename, gstring->str, -1, &err ) )
 	{
-		g_printerr ( "treeview_to_file: %s \n", err->message );
+		g_critical ( "%s: %s ", __func__, err->message );
 
 		g_error_free ( err );
 	}
@@ -460,7 +460,7 @@ static void treeview_append ( GtkTreeView *tree_view, Base *base, gboolean play,
 		GtkTreePath *path = gtk_tree_model_get_path ( model, &iter );
 		gtk_tree_selection_select_path ( gtk_tree_view_get_selection ( GTK_TREE_VIEW ( tree_view ) ), path );
 
-		g_debug ( "treeview_append: PLAY %s \n", data );
+		g_debug ( "%s: PLAY %s ", __func__, data );
 	}
 }
 
@@ -622,7 +622,7 @@ void treeview_add_dir ( Base *base, const char *dir_path )
 	}
 	else
 	{
-		g_printerr ( "treeview_add_dir: opening directory %s failed\n", dir_path );
+		g_critical ( "%s: opening directory %s failed.", __func__, dir_path );
 	}
 
 	treeview_slist_sort ( list, base ); // on sort

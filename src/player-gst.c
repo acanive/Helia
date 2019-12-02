@@ -14,9 +14,10 @@
 #include "player-slider.h"
 #include "tree-view.h"
 #include "info.h"
+#include "lang.h"
 
 
-static void player_stop_record ( Base *base, gboolean play );
+static void player_stop_record ( Base *base, gboolean play, gboolean play_rec );
 
 
 GstElement * player_gst_ret_iterate_element ( GstElement *it_element, const char *name1, const char *name2 )
@@ -48,7 +49,7 @@ GstElement * player_gst_ret_iterate_element ( GstElement *it_element, const char
 						element_ret = element;
 				}
 
-				g_debug ( "Object name: %s ", object_name );
+				g_debug ( "%s:: Object name: %s ", __func__, object_name );
 
 				g_free ( object_name );
 				g_value_reset (&item);
@@ -170,7 +171,7 @@ void player_gst_new_pos ( Base *base, gint64 set_pos, gboolean up_dwn )
 	{
 		if ( gst_element_query_duration ( base->player->playbin, GST_FORMAT_TIME, &duration ) ) dur_b = TRUE;
 
-		if ( !dur_b || duration == 0 ) return;
+		if ( !dur_b || duration / GST_SECOND < 1 ) return;
 
 		if ( up_dwn ) new_pos = ( duration > ( current + skip ) ) ? ( current + skip ) : duration;
 
@@ -189,12 +190,11 @@ void player_gst_new_pos ( Base *base, gint64 set_pos, gboolean up_dwn )
 
 void player_stop ( Base *base )
 {
-	base->player->is_live = FALSE;
 	base->player->duration_old = 0;
 
-	if ( base->player->record )
+	if ( base->player->record || base->player->record_f )
 	{
-		player_stop_record ( base, FALSE );
+		player_stop_record ( base, FALSE, FALSE );
 		return;
 	}
 
@@ -240,7 +240,7 @@ static gboolean player_update_win ( Base *base )
 
 		if ( ( base->player->t_cur_mp - base->player->t_start_mp ) >= 10 )
 		{
-			g_warning ( "Time stop %ld (sec) ", base->player->t_cur_mp - base->player->t_start_mp );
+			g_warning ( "%s: Time stop %ld (sec) ", __func__, base->player->t_cur_mp - base->player->t_start_mp );
 
 			player_stop ( base );
 
@@ -263,28 +263,28 @@ void player_play_paused ( Base *base )
 			gst_element_set_state ( base->player->playbin, GST_STATE_PAUSED );
 }
 
-void player_set_subtitle ( Base *base )
+void player_set_subtitle ( Base *base, gboolean state_subtitle )
 {
-	enum gst_flags { GST_PLAY_FLAG_TEXT = (1 << 2) };
+	enum gst_flags { GST_FLAG_TEXT = (1 << 2) };
 
 	uint flags;
 	g_object_get ( base->player->playbin, "flags", &flags, NULL );
 
-	if (  base->player->state_subtitle ) flags |=  GST_PLAY_FLAG_TEXT;
-	if ( !base->player->state_subtitle ) flags &= ~GST_PLAY_FLAG_TEXT;
+	if (  state_subtitle ) flags |=  GST_FLAG_TEXT;
+	if ( !state_subtitle ) flags &= ~GST_FLAG_TEXT;
 
 	g_object_set ( base->player->playbin, "flags", flags, NULL );
 }
 
 void player_set_vis ( Base *base )
 {
-	enum gst_flags { GST_PLAY_FLAG_VIS = (1 << 3) };
+	enum gst_flags { GST_FLAG_VIS = (1 << 3) };
 
 	uint flags;
 	g_object_get ( base->player->playbin, "flags", &flags, NULL );
 
-	if (  base->player->vis_plugin ) flags |=  GST_PLAY_FLAG_VIS;
-	if ( !base->player->vis_plugin ) flags &= ~GST_PLAY_FLAG_VIS;
+	if (  base->player->vis_plugin ) flags |=  GST_FLAG_VIS;
+	if ( !base->player->vis_plugin ) flags &= ~GST_FLAG_VIS;
 
 	g_object_set ( base->player->playbin, "flags", flags, NULL );
 
@@ -312,13 +312,8 @@ void player_play ( Base *base )
 	}
 }
 
-void player_stop_set_play ( Base *base, const char *name_file )
+void player_play_set_uri ( Base *base, const char *name_file )
 {
-	player_stop ( base );
-
-	if ( base->player->file_play ) g_free ( base->player->file_play );
-	base->player->file_play = g_strdup ( name_file );
-
     if ( g_strrstr ( name_file, "://" ) )
         g_object_set ( base->player->playbin, "uri", name_file, NULL );
     else
@@ -329,6 +324,16 @@ void player_stop_set_play ( Base *base, const char *name_file )
 
         g_free ( uri );
     }
+}
+
+void player_stop_set_play ( Base *base, const char *name_file )
+{
+	player_stop ( base );
+
+	if ( base->player->file_play ) g_free ( base->player->file_play );
+	base->player->file_play = g_strdup ( name_file );
+
+    player_play_set_uri ( base, name_file );
 
 	player_play ( base );
 }
@@ -356,7 +361,7 @@ static void player_gst_msg_err ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg, Bas
 
     gst_message_parse_error ( msg, &err, &dbg );
 
-    g_printerr ( "player_gst_msg_err: %s (%s)\n", err->message, (dbg) ? dbg : "no details" );
+    g_critical ( "%s: %s (%s)", __func__, err->message, (dbg) ? dbg : "no details" );
 
     base_message_dialog ( "", err->message, GTK_MESSAGE_ERROR, base->window );
 
@@ -370,8 +375,15 @@ static void player_gst_msg_eos ( G_GNUC_UNUSED GstBus *bus, G_GNUC_UNUSED GstMes
 {
 	if ( base->player->is_live )
 	{
-		gst_element_set_state ( base->player->playbin, GST_STATE_NULL    );
-		gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING );
+		player_stop ( base );
+
+		if ( base->player->record || base->player->record_f )
+			base_message_dialog ( "EOS", _i18n_ ( base, "Live recording stopped." ), GTK_MESSAGE_WARNING, base->window );
+		else
+			base_message_dialog ( "EOS", _i18n_ ( base, "Live playback stopped."  ), GTK_MESSAGE_WARNING, base->window );
+
+		// gst_element_set_state ( base->player->playbin, GST_STATE_NULL    );
+		// gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING );
 	}
 	else
 	{
@@ -400,32 +412,32 @@ static void player_gst_msg_buf ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg, Bas
 		// if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_PAUSED )
 			gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING );
 
-		gtk_label_set_text ( base->player->slider_base.rec_buf, "" );
+		gtk_label_set_text ( base->player->slider_base.rec_buf, "---" );
 
 		if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
-				gtk_label_set_text ( base->player->slider_panel.rec_buf, "" );
+				gtk_label_set_text ( base->player->slider_panel.rec_buf, "---" );
 	}
 	else
 	{
 		if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_PLAYING )
 			gst_element_set_state ( base->player->playbin, GST_STATE_PAUSED );
 
-		char *str = g_strdup_printf ( " %d%s ", percent, "%" );
+		char *str = ( percent < 10 ) ? g_strdup_printf ( "0%d%s", percent, "%" ) : g_strdup_printf ( "%d%s", percent, "%" );
 
 			gtk_label_set_text ( base->player->slider_base.rec_buf, str );
 
 			if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
 				gtk_label_set_text ( base->player->slider_panel.rec_buf, str );
 
-		free ( str );
+		// g_print ( "%s: buffering: %s \n", __func__, str );
 
-		// g_print ( "buffering: %d %s \n", percent, "%" );
+		free ( str );
 	}
 }
 
 GstElement * player_gst_create ( Base *base )
 {
-    GstElement *playbin = gst_element_factory_make ( "playbin", "playbin" );
+    GstElement *playbin = gst_element_factory_make ( "playbin", NULL );
 
 	GstElement *bin_audio, *bin_video, *asink, *vsink, *videoblnc, *equalizer;
 
@@ -437,7 +449,7 @@ GstElement * player_gst_create ( Base *base )
 
     if ( !playbin || !vsink || !asink || !videoblnc || !equalizer )
     {
-        g_printerr ( "player_gst_create - not all elements could be created.\n" );
+        g_critical ( "%s: playbin - not all elements could be created.", __func__ );
 
         return NULL;
     }
@@ -481,6 +493,28 @@ GstElement * player_gst_create ( Base *base )
 
 // Record IPTV
 
+static char * player_time_to_str ()
+{
+	GDateTime *date = g_date_time_new_now_local ();
+
+	char *str_time = g_date_time_format ( date, "%j-%Y-%T" );
+
+	g_date_time_unref ( date );
+
+	return str_time;
+}
+
+static void player_rec_set_location ( GstElement *element, char *rec_dir )
+{
+	char *date_str = player_time_to_str ();
+	char *file_rec = g_strdup_printf ( "%s/Record-iptv-%s", rec_dir, date_str );
+
+	g_object_set ( element, "location", file_rec, NULL );
+
+	g_free ( file_rec );
+	g_free ( date_str );
+}
+
 static void player_gst_pad_link ( GstPad *pad, GstElement *element, const char *name, G_GNUC_UNUSED GstElement *element_n )
 {
 	GstPad *pad_va_sink = gst_element_get_static_pad ( element, "sink" );
@@ -488,11 +522,15 @@ static void player_gst_pad_link ( GstPad *pad, GstElement *element, const char *
 	if ( gst_pad_link ( pad, pad_va_sink ) == GST_PAD_LINK_OK )
 		gst_object_unref ( pad_va_sink );
 	else
-		g_debug ( "player_gst_pad_link:: linking demux/decode name %s video/audio pad failed", name );
+		g_debug ( "%s:: linking demux/decode name %s video/audio pad failed ", __func__, name );
 }
 
-static void player_gst_pad_hlsdemux ( GstElement *element, GstPad *pad_new, GstElement *element_l )
+static void player_gst_pad_hlsdemux ( GstElement *element, GstPad *pad_new, Base *base )
 {
+	GstElement *element_link = player_gst_ret_iterate_element ( base->player->pipeline_rec, "tee-hls-rec", NULL ); 
+
+	if ( element_link == NULL ) return;
+
 	GstIterator *it = gst_element_iterate_src_pads ( element );
 	GValue item = { 0, };
 	gboolean done = FALSE;
@@ -509,20 +547,18 @@ static void player_gst_pad_hlsdemux ( GstElement *element, GstPad *pad_new, GstE
 
 				if ( gst_pad_is_linked ( pad_src ) )
 				{
-					GstPad *sink_pad = gst_element_get_static_pad ( element_l, "sink" );
+					GstPad *sink_pad = gst_element_get_static_pad ( element_link, "sink" );
 
 					if ( gst_pad_unlink ( pad_src, sink_pad ) )
-					{
-						// player_gst_pad_link ( pad_new, element_l, "hlsdemux", element );
-
-						g_debug ("player_gst_pad_hlsdemux: unlink OK" );
-					}
+						g_debug ( "%s: unlink Ok ", __func__ );
 					else
-						g_debug ("player_gst_pad_hlsdemux: unlink Failed" );
+						g_debug ( "%s: unlink Failed ", __func__ );
+
+					gst_object_unref ( sink_pad );
 				}
 				else
 				{
-					player_gst_pad_link ( pad_new, element_l, "hlsdemux", element );
+					player_gst_pad_link ( pad_new, element_link, "hlsdemux", element );
 				}
 
 				g_free ( name );
@@ -549,27 +585,38 @@ static void player_gst_pad_hlsdemux ( GstElement *element, GstPad *pad_new, GstE
 	gst_iterator_free ( it );
 }
 
+static gboolean player_gst_pad_check_type ( GstPad *pad, const char *type )
+{
+	gboolean ret = FALSE;
+
+	GstCaps *caps = gst_pad_get_current_caps ( pad );
+
+	const char *name = gst_structure_get_name ( gst_caps_get_structure ( caps, 0 ) );
+
+	g_debug ( "%s:: caps type: %s ( find type %s ) ",__func__, name, type );
+
+	if ( g_str_has_prefix ( name, type ) ) ret = TRUE;
+
+	gst_caps_unref (caps);
+
+	return ret;
+}
+
 static void player_gst_pad_demux_audio ( GstElement *element, GstPad *pad, GstElement *element_audio )
 {
-	const char *name = gst_structure_get_name ( gst_caps_get_structure ( gst_pad_query_caps ( pad, NULL ), 0 ) );
-
-	if ( g_str_has_prefix ( name, "audio" ) ) player_gst_pad_link ( pad, element_audio, name, element );
+	if ( player_gst_pad_check_type ( pad, "audio" ) ) player_gst_pad_link ( pad, element_audio, "demux audio", element );
 }
 
 static void player_gst_pad_demux_video ( GstElement *element, GstPad *pad, GstElement *element_video )
 {
-	const char *name = gst_structure_get_name ( gst_caps_get_structure ( gst_pad_query_caps ( pad, NULL ), 0 ) );
-
-	if ( g_str_has_prefix ( name, "video" ) ) player_gst_pad_link ( pad, element_video, name, element );
+	if ( player_gst_pad_check_type ( pad, "video" ) ) player_gst_pad_link ( pad, element_video, "demux video", element );
 }
 
 static void player_gst_pad_decode ( GstElement *element, GstPad *pad, GstElement *element_va )
 {
-	const char *name = gst_structure_get_name ( gst_caps_get_structure ( gst_pad_query_caps ( pad, NULL ), 0 ) );
-
-	player_gst_pad_link ( pad, element_va, name, element );
+	player_gst_pad_link ( pad, element_va, "decode  audio / video", element );
 }
-
+/*
 static void player_gst_msg_buf_rec ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg, Base *base )
 {
 	if ( base->app_quit ) return;
@@ -582,44 +629,32 @@ static void player_gst_msg_buf_rec ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg,
 		// if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state == GST_STATE_PAUSED )
 			gst_element_set_state ( base->player->pipeline_rec, GST_STATE_PLAYING );
 
-		gtk_label_set_text ( base->player->slider_base.rec_buf, "" );
+		gtk_label_set_text ( base->player->slider_base.rec_buf, "---" );
 
 		if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
-				gtk_label_set_text ( base->player->slider_panel.rec_buf, "" );
+				gtk_label_set_text ( base->player->slider_panel.rec_buf, "---" );
 	}
 	else
 	{
 		if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state == GST_STATE_PLAYING )
 			gst_element_set_state ( base->player->pipeline_rec, GST_STATE_PAUSED );
 
-		char *str = g_strdup_printf ( " %d%s ", percent, "%" );
+		char *str = ( percent < 10 ) ? g_strdup_printf ( "0%d%s", percent, "%" ) : g_strdup_printf ( "%d%s", percent, "%" );
 
 			gtk_label_set_text ( base->player->slider_base.rec_buf, str );
 
 			if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
 				gtk_label_set_text ( base->player->slider_panel.rec_buf, str );
 
-		free ( str );
+		// g_print ( "%s: Rec buffering: %s \n", __func__, str );
 
-		// g_print ( "Rec buffering: %d %s \n", percent, "%" );
+		free ( str );
 	}
 }
-
-static gboolean player_record_refresh ( Base *base )
+*/
+static void player_record_update_position ( Base *base )
 {
-	if ( base->app_quit ) return FALSE;
-
-	if ( !base->player->record )
-	{
-		gtk_label_set_text ( base->player->slider_base.rec_buf, "" );
-
-		if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
-			gtk_label_set_text ( base->player->slider_panel.rec_buf, "" );
-
-		return FALSE;
-	}
-
-	if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state == GST_STATE_PAUSED ) return TRUE;
+	if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state != GST_STATE_PLAYING ) return;
 
 	gint64 duration = 0, current = 0;
 
@@ -627,32 +662,52 @@ static gboolean player_record_refresh ( Base *base )
 	{
 		if ( gst_element_query_duration ( base->player->pipeline_rec, GST_FORMAT_TIME, &duration ) )
 		{
-			if ( duration > 0 )
+			if ( duration / GST_SECOND > 0 )
 				player_slider_set_data ( base, current, 10, duration, 10, TRUE );
 			else
 				player_slider_set_data ( base, current, 10, -1, 10, FALSE );
-
-			if ( duration > 0 && current / GST_SECOND == duration / GST_SECOND )
-			{
-				player_stop_record ( base, FALSE );
-			}
 		}
 		else
 			player_slider_set_data ( base, current, 10, -1, 10, FALSE );
 	}
+}
 
+static void player_rec_status_update ( Base *base )
+{
 	const char *format = "<span foreground=\"#FF0000\">%s</span>";
 
 	char *markup = g_markup_printf_escaped ( format, ( base->player->rec_status ) ? " ◉ " : " ◌ " );
 
-		gtk_label_set_markup ( base->player->slider_base.rec_buf, markup );
+		gtk_label_set_markup ( base->player->slider_base.rec_sts, markup );
 
 		if ( !base->player->panel_quit && gtk_widget_get_visible ( GTK_WIDGET ( base->player->h_box_slider_panel ) ) )
-			gtk_label_set_markup ( base->player->slider_panel.rec_buf, markup );
+			gtk_label_set_markup ( base->player->slider_panel.rec_sts, markup );
 
 		base->player->rec_status = !base->player->rec_status;
 
 	g_free ( markup );
+}
+
+static gboolean player_record_update_hls ( Base *base )
+{
+	if ( base->app_quit ) return FALSE;
+
+	if ( !base->player->record ) { player_slider_clear_data ( base ); return FALSE; }
+
+	player_record_update_position ( base );
+
+	player_rec_status_update ( base );
+
+	return TRUE;
+}
+
+static gboolean player_record_update_file ( Base *base )
+{
+	if ( base->app_quit ) return FALSE;
+
+	if ( !base->player->record_f ) { player_slider_clear_data ( base ); return FALSE; }
+
+	player_rec_status_update ( base );
 
 	return TRUE;
 }
@@ -673,7 +728,7 @@ static void player_gst_rec_remove ( GstElement *pipeline )
 
 				char *object_name = gst_object_get_name ( GST_OBJECT ( element ) );
 
-				g_debug ( "Object remove: %s", object_name );
+				g_debug ( "%s:: Object remove: %s", __func__, object_name );
 
 				gst_bin_remove ( GST_BIN ( pipeline ), element );
 
@@ -701,35 +756,13 @@ static void player_gst_rec_remove ( GstElement *pipeline )
 	gst_iterator_free ( it );
 }
 
-static char * player_time_to_str ()
-{
-	GDateTime *date = g_date_time_new_now_local ();
-
-	char *str_time = g_date_time_format ( date, "%j-%Y-%T" );
-
-	g_date_time_unref ( date );
-
-	return str_time;
-}
-
-static void player_rec_set_location ( GstElement *element, char *rec_dir )
-{
-	char *date_str = player_time_to_str ();
-	char *file_rec = g_strdup_printf ( "%s/Record-iptv-%s", rec_dir, date_str );
-
-	g_object_set ( element, "location", file_rec, NULL );
-
-	g_free ( file_rec );
-	g_free ( date_str );
-}
-
 static GstElement * player_gst_create_rec_pipeline ( Base *base )
 {
 	GstElement *pipeline_rec = gst_pipeline_new ( "pipeline-record" );
 
     if ( !pipeline_rec )
     {
-        g_printerr ( "pipeline_rec - not created.\n" );
+        g_critical ( "%s: pipeline-record - not created.", __func__ );
 
         return NULL;
     }
@@ -740,7 +773,7 @@ static GstElement * player_gst_create_rec_pipeline ( Base *base )
     gst_bus_set_sync_handler ( bus, (GstBusSyncHandler)player_gst_bus_sync_handler, base, NULL );
 
     g_signal_connect ( bus, "message::error",     G_CALLBACK ( player_gst_msg_err     ), base );
-    g_signal_connect ( bus, "message::buffering", G_CALLBACK ( player_gst_msg_buf_rec ), base );
+    // g_signal_connect ( bus, "message::buffering", G_CALLBACK ( player_gst_msg_buf_rec ), base );
 
     gst_object_unref ( bus );
 
@@ -753,9 +786,11 @@ static GstElement * player_gst_rec_create_hls ( Base *base, uint n_video, uint n
 
 	if ( !pipeline_rec ) return NULL;
 
+	// g_print ( "%s: Rec HLS \n", __func__ );
+
 	struct rec_all { const char *name; } rec_all_n[] =
 	{
-		{ "souphttpsrc" }, { "queue2"    }, { "hlsdemux"     }, { "tee" }, { "queue2" }, { "decodebin"     },
+		{ "souphttpsrc" }, { "hlsdemux"  }, { "tee"          }, { "queue2"            }, { "decodebin"     },
 		{ "queue2"      }, { "decodebin" }, { "audioconvert" }, { "equalizer-nbands"  }, { "autoaudiosink" },
 		{ "queue2"      }, { "decodebin" }, { "videoconvert" }, { "videobalance"      }, { "autovideosink" },
 		{ "queue2"      }, { "hlssink"   }
@@ -766,45 +801,45 @@ static GstElement * player_gst_rec_create_hls ( Base *base, uint n_video, uint n
 	uint c = 0;
 	for ( c = 0; c < G_N_ELEMENTS ( rec_all_n ); c++ )
 	{
-		if ( n_video == 0 && ( c == 11 || c == 12 || c == 13 || c == 14 || c == 15 ) ) continue;
+		if ( n_video == 0 && ( c == 10 || c == 11 || c == 12 || c == 13 || c == 14 ) ) continue;
 
 		if (  c == 0 )
 			elements[c] = gst_element_make_from_uri ( GST_URI_SRC, base->player->file_play, NULL, NULL );
 		else
-			elements[c] = gst_element_factory_make ( rec_all_n[c].name, NULL );
+			elements[c] = gst_element_factory_make ( rec_all_n[c].name, ( c == 2 ) ? "tee-hls-rec" : NULL );
 
 		if ( !elements[c] )
 		{
-			g_critical ( "player_gst_rec_create:: element (factory make) - %s not created. \n", rec_all_n[c].name );
+			g_critical ( "%s:: element (factory make) - %s not created. \n", __func__, rec_all_n[c].name );
 
 			return NULL;
 		}
 
 		gst_bin_add ( GST_BIN ( pipeline_rec ), elements[c] );
 
-		if (  c == 0 || c == 3 || c == 6 || c == 8 || c == 11 || c == 13 || c == 16 ) continue;
+		if (  c == 0 || c == 2 || c == 5 || c == 7 || c == 10 || c == 12 || c == 15 ) continue;
 
 		gst_element_link ( elements[c-1], elements[c] );
 	}
 
-	g_signal_connect ( elements[2], "pad-added",   G_CALLBACK ( player_gst_pad_hlsdemux ), elements[3] );
+	g_signal_connect ( elements[1], "pad-added",   G_CALLBACK ( player_gst_pad_hlsdemux ), base );
 
-	if ( n_audio > 0 ) g_signal_connect ( elements[5], "pad-added", G_CALLBACK ( player_gst_pad_demux_audio ), elements[6] );
-	if ( n_video > 0 ) g_signal_connect ( elements[5], "pad-added", G_CALLBACK ( player_gst_pad_demux_video ), elements[11] );
+	if ( n_audio > 0 ) g_signal_connect ( elements[4], "pad-added", G_CALLBACK ( player_gst_pad_demux_audio ), elements[5] );
+	if ( n_video > 0 ) g_signal_connect ( elements[4], "pad-added", G_CALLBACK ( player_gst_pad_demux_video ), elements[10] );
 
-	if ( n_audio > 0 ) g_signal_connect ( elements[7],  "pad-added", G_CALLBACK ( player_gst_pad_decode ), elements[8]  );
-	if ( n_video > 0 ) g_signal_connect ( elements[12], "pad-added", G_CALLBACK ( player_gst_pad_decode ), elements[13] );
+	if ( n_audio > 0 ) g_signal_connect ( elements[6],  "pad-added", G_CALLBACK ( player_gst_pad_decode ), elements[7]  );
+	if ( n_video > 0 ) g_signal_connect ( elements[11], "pad-added", G_CALLBACK ( player_gst_pad_decode ), elements[12] );
 
-	g_object_set ( elements[1],  "use-buffering", TRUE, NULL );
+	// g_object_set ( elements[4],  "use-buffering", TRUE, NULL );
 
 	if ( g_object_class_find_property ( G_OBJECT_GET_CLASS ( elements[0] ), "location" ) )
 		g_object_set ( elements[0],  "location", base->player->file_play, NULL );
 	else
 		g_object_set ( elements[0], "uri", base->player->file_play, NULL );
 
-	gst_element_link ( elements[3],  elements[16] );
+	gst_element_link ( elements[2],  elements[15] );
 
-	player_rec_set_location ( elements[17], base->rec_dir );
+	player_rec_set_location ( elements[16], base->rec_dir );
 
     return pipeline_rec;
 }
@@ -815,9 +850,11 @@ static GstElement * player_gst_rec_create_file ( Base *base )
 
 	if ( !pipeline_rec ) return NULL;
 
+	// g_print ( "%s: Rec No HLS \n", __func__ );
+
 	struct rec_all { const char *name; } rec_all_n[] =
 	{
-		{ "souphttpsrc" }, { "filesink" }
+		{ "souphttpsrc" }, { "queue2" }, { "filesink" }
 	};
 
 	GstElement *elements[ G_N_ELEMENTS ( rec_all_n ) ];
@@ -832,7 +869,7 @@ static GstElement * player_gst_rec_create_file ( Base *base )
 
 		if ( !elements[c] )
 		{
-			g_critical ( "player_gst_rec_create:: element (factory make) - %s not created. \n", rec_all_n[c].name );
+			g_critical ( "%s:: element (factory make) - %s not created. \n", __func__, rec_all_n[c].name );
 
 			return NULL;
 		}
@@ -840,39 +877,20 @@ static GstElement * player_gst_rec_create_file ( Base *base )
 		gst_bin_add ( GST_BIN ( pipeline_rec ), elements[c] );
 	}
 
+	gst_element_link_many ( elements[0], elements[1], elements[2], NULL );
+
 	if ( g_object_class_find_property ( G_OBJECT_GET_CLASS ( elements[0] ), "location" ) )
 		g_object_set ( elements[0],  "location", base->player->file_play, NULL );
 	else
 		g_object_set ( elements[0], "uri", base->player->file_play, NULL );
 
-	gst_element_link ( elements[0], elements[1] );
+	// g_object_set ( elements[1],  "use-buffering", TRUE, NULL );
 
-	player_rec_set_location ( elements[1], base->rec_dir );
+	player_rec_set_location ( elements[2], base->rec_dir );
 
     return pipeline_rec;
 }
 
-static void player_stop_record ( Base *base, gboolean play )
-{
-    if ( base->player->record )
-    {
-		gst_element_set_state ( base->player->pipeline_rec, GST_STATE_NULL );
-
-		player_gst_rec_remove ( base->player->pipeline_rec );
-
-		gst_object_unref ( base->player->pipeline_rec );
-
-		base->player->pipeline_rec = NULL;
-
-		gtk_widget_queue_draw ( GTK_WIDGET ( base->window ) );
-
-		base->player->record = !base->player->record;
-
-		base->player->is_live = FALSE;
-
-		if ( play ) player_play ( base );
-	}
-}
 static gboolean player_record_new_play ( Base *base )
 {
 	GstElement *element = base->player->pipeline_rec;
@@ -885,42 +903,61 @@ static gboolean player_record_new_play ( Base *base )
 
 	g_object_get ( element, "location", &file, NULL );
 
-	g_debug ( "player_record_new_play: file rec: %s ", file );
+	g_debug ( "%s:: file rec: %s ", __func__, file );
 
-	char *cmd = g_strdup_printf ( "helia %s", file );
+	gst_element_set_state ( base->player->playbin, GST_STATE_NULL );
 
-	GAppInfo *app = g_app_info_create_from_commandline ( cmd, NULL, 0, NULL );
+	player_play_set_uri ( base, file );
 
-	if ( app )
-	{
-		GError *error = NULL;
+	gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING );
 
-		g_app_info_launch ( app, NULL, NULL, &error );
-
-		if ( error )
-		{
-			g_print ( "player_record_new_play: %s \n", error->message );
-
-			g_error_free ( error );
-		}
-
-		g_object_unref ( app );
-	}
-
-	g_free ( cmd );
+	g_free ( file );
 
 	return FALSE;
 }
 
+static void player_stop_record ( Base *base, gboolean play, gboolean play_rec )
+{
+	g_debug ( "%s:: play: %s ", __func__, play ? "TRUE": "FALSE" );
+
+    if ( base->player->record || base->player->record_f )
+    {
+		gst_element_set_state ( base->player->pipeline_rec, GST_STATE_NULL );
+
+		player_gst_rec_remove ( base->player->pipeline_rec );
+
+		gst_object_unref ( base->player->pipeline_rec );
+
+		base->player->pipeline_rec = NULL;
+
+		gtk_widget_queue_draw ( GTK_WIDGET ( base->window ) );
+
+		if ( base->player->record ) base->player->record = !base->player->record;
+
+		if ( base->player->record_f ) base->player->record_f = !base->player->record_f;
+
+		if ( play ) player_play ( base ); else player_stop ( base );
+
+		if ( play_rec )
+		{
+			gst_element_set_state ( base->player->playbin, GST_STATE_NULL );
+
+			player_play_set_uri ( base, base->player->file_play );
+
+			gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING );
+		}
+	}
+}
+
 void player_record ( Base *base )
 {
-    if ( base->player->record )
+    if ( base->player->record || base->player->record_f )
     {
-		player_stop_record ( base, TRUE );
+		player_stop_record ( base, ( base->player->record ) ? TRUE : FALSE, base->player->record_f );
 	}
 	else
 	{
-		if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state != GST_STATE_PLAYING ) return;
+		if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_NULL ) return;
 
 		uint n_video, n_audio;
 		g_object_get ( base->player->playbin, "n-video", &n_video, NULL );
@@ -947,6 +984,8 @@ void player_record ( Base *base )
 
 		g_free ( uri_protocol );
 
+		if ( n_video > 0 ) base->player->rec_video_enable = TRUE; else base->player->rec_video_enable = FALSE;
+
 		GstElement *element = player_gst_ret_iterate_element ( base->player->playbin, "hlsdemux", NULL );
 
 		if ( element )
@@ -961,13 +1000,20 @@ void player_record ( Base *base )
 
 			gst_element_set_state ( base->player->pipeline_rec, GST_STATE_PLAYING );
 
-			base->player->record = !base->player->record;
+			if ( element )
+			{
+				base->player->record = !base->player->record;
 
-			base->player->is_live = TRUE;
+				g_timeout_add_seconds ( 1, (GSourceFunc)player_record_update_hls, base );
+			}
+			else
+			{
+				base->player->record_f = !base->player->record_f;
 
-			g_timeout_add_seconds ( 1, (GSourceFunc)player_record_refresh, base );
+				g_timeout_add_seconds ( 1, (GSourceFunc)player_record_update_file, base );
 
-			if ( !element ) g_timeout_add_seconds ( 3, (GSourceFunc)player_record_new_play, base );
+				g_timeout_add_seconds ( 3, (GSourceFunc)player_record_new_play, base );
+			}
 		}
 	}
 }

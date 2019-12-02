@@ -58,6 +58,7 @@ static void player_slider_clear_all ( Slider slider, GtkBox *box_slider )
 {
 	player_slider_update_slider ( slider, 120*60, 0 );
 
+	gtk_label_set_text ( slider.rec_sts, "" );
 	gtk_label_set_text ( slider.rec_buf, "" );
 	gtk_label_set_text ( slider.lab_pos, "0:00:00" );
 	gtk_label_set_text ( slider.lab_dur, "0:00:00" );
@@ -98,7 +99,7 @@ static void player_slider_update_data ( Base *base, Slider slider )
 	{
 		if ( gst_element_query_duration ( base->player->playbin, GST_FORMAT_TIME, &duration ) ) dur_b = TRUE;
 
-		if ( dur_b && duration > 0 )
+		if ( dur_b && duration / GST_SECOND > 0 )
 		{
 			player_slider_update_slider ( slider, (gdouble)duration / GST_SECOND, (gdouble)current / GST_SECOND );
 
@@ -116,7 +117,8 @@ static gboolean player_slider_refresh ( Base *base )
 {
 	if ( base->app_quit ) return FALSE;
 
-	if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state != GST_STATE_PLAYING ) return TRUE;
+	if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state <  GST_STATE_PAUSED ||
+	   ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_PAUSED && !base->player->set_state ) ) return TRUE;
 
 	gboolean dur_b = FALSE;
 	gint64 duration = 0, current = 0;
@@ -125,15 +127,10 @@ static gboolean player_slider_refresh ( Base *base )
 	{
 		if ( gst_element_query_duration ( base->player->playbin, GST_FORMAT_TIME, &duration ) ) dur_b = TRUE;
 
-		base->player->is_live = dur_b;
+		if ( ( duration / GST_SECOND ) < 1 ) base->player->is_live = TRUE; else base->player->is_live = FALSE;
 
-			if ( dur_b && duration > 0 )
+			if ( dur_b && duration / GST_SECOND > 0 )
 			{
-				if ( base->player->duration_old > 0 && duration > base->player->duration_old ) 
-					base->player->is_live = TRUE;
-				else
-					base->player->is_live = FALSE;
-
 				if ( current / GST_SECOND < duration / GST_SECOND )
 				{
 					player_slider_update_slider ( base->player->slider_base, (gdouble)duration / GST_SECOND, (gdouble)current / GST_SECOND );
@@ -145,13 +142,18 @@ static gboolean player_slider_refresh ( Base *base )
 				}
 				else
 				{
-					if ( !base->player->is_live ) player_next ( base );
+					static uint count_end = 0;
+
+					if ( count_end > 29 ) { player_next ( base ); count_end = 0; } else count_end++;
 				}
 
-				if ( base->player->is_live )
+				if ( base->player->duration_old / GST_SECOND > 0 && duration / GST_SECOND != base->player->duration_old / GST_SECOND )
 				{
 					if ( ( duration / GST_SECOND ) - ( current / GST_SECOND ) < 5 )
-						gst_element_set_state ( base->player->playbin, GST_STATE_PAUSED );
+						{ gst_element_set_state ( base->player->playbin, GST_STATE_PAUSED ); base->player->set_state  = TRUE;  }
+
+					if ( base->player->set_state && ( duration / GST_SECOND ) - ( current / GST_SECOND ) > 9 )
+						{ gst_element_set_state ( base->player->playbin, GST_STATE_PLAYING ); base->player->set_state = FALSE; }
 				}
 
 				base->player->duration_old = duration;
@@ -171,6 +173,7 @@ static Slider player_create_slider_label ( Base *base, void (*f)() )
 
 	slider.lab_pos = (GtkLabel *)gtk_label_new ( "0:00:00" );
 	slider.lab_dur = (GtkLabel *)gtk_label_new ( "0:00:00" );
+	slider.rec_sts  = (GtkLabel *)gtk_label_new ( "" );
 	slider.rec_buf  = (GtkLabel *)gtk_label_new ( "" );
 
 	slider.slider  = (GtkScale *)gtk_scale_new_with_range ( GTK_ORIENTATION_HORIZONTAL, 0, 120*60, 1 );
@@ -191,6 +194,7 @@ static GtkBox * player_create_slider_box ( Slider slider )
 	gtk_box_set_spacing ( hbox, 5 );
 
 	gtk_box_pack_start ( hbox, GTK_WIDGET ( slider.lab_pos ), FALSE, FALSE, 0 );
+	gtk_box_pack_start ( hbox, GTK_WIDGET ( slider.rec_sts ), FALSE, FALSE, 0 );
 	gtk_box_pack_start ( hbox, GTK_WIDGET ( slider.rec_buf ), FALSE, FALSE, 0 );
 	gtk_box_pack_start ( hbox, GTK_WIDGET ( slider.slider  ), TRUE,  TRUE,  0 );
 	gtk_box_pack_start ( hbox, GTK_WIDGET ( slider.lab_dur ), FALSE, FALSE, 0 );

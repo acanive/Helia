@@ -1,11 +1,46 @@
-project('helia-app', 'c')
+project(
+  'helia', 'c',
+  version: '9.9'
+)
+
+
+gettext_option = get_option('enable-gettext')
+if gettext_option
+
+common_flags = [
+  '-DUSE_GETTEXT',
+  '-DGETTEXT_PACKAGE=helia'
+]
+
+  i18n = import('i18n')
+  subdir('po')
+
+  po_dir = join_paths(meson.source_root(), 'po')
+
+  add_project_arguments(common_flags, language: 'c')
+  message('** Using the Gettext')
+
+endif
+
+
+helia_prefix = get_option('prefix')
+helia_bindir = join_paths(helia_prefix, get_option('bindir'))
+
+desktop_sh  = find_program('data/desktop.sh')
+gen_gres_sh = find_program('data/gen-gres.sh')
+
+desktop_out    = 'build/helia.desktop'
+helia_gres_xml = 'build/gresource.xml'
+
+run_command(desktop_sh,  desktop_out, helia_bindir)
+run_command(gen_gres_sh, helia_gres_xml)
 
 gnome = import('gnome')
 
 res = gnome.compile_resources(
 	'helia_resources',
-	'build/data/gresource.xml',
-	source_dir: 'build/data'
+	helia_gres_xml,
+	source_dir: 'build'
 )
 
 src = [
@@ -31,7 +66,7 @@ src = [
 
 incdir = include_directories('include')
 
-install_data('build/helia.desktop', install_dir: join_paths('share', 'applications'))
+install_data(desktop_out, install_dir: join_paths('share', 'applications'))
 
 dependencies = [
 	dependency('gtk+-3.0'),

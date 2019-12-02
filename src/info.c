@@ -44,7 +44,7 @@ static const char *all_code[] =
 };
 
 
-static void info_combo_leng_changed ( GtkComboBox *widget, Base *base )
+static void info_combo_lang_changed ( GtkComboBox *widget, Base *base )
 {
     dtv_gst_changed_audio_track ( base, gtk_combo_box_get_active ( GTK_COMBO_BOX ( widget ) ) );
 }
@@ -52,6 +52,7 @@ static void info_combo_leng_changed ( GtkComboBox *widget, Base *base )
 static GtkBox * info_tv ( Base *base )
 {
 	GtkBox *v_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	gtk_box_set_spacing ( v_box, 5 );
 	gtk_widget_set_margin_top   ( GTK_WIDGET ( v_box ), 10 );
 	gtk_widget_set_margin_start ( GTK_WIDGET ( v_box ), 10 );
 	gtk_widget_set_margin_end   ( GTK_WIDGET ( v_box ), 10 );
@@ -69,13 +70,13 @@ static GtkBox * info_tv ( Base *base )
 
 	gtk_box_pack_start ( v_box, GTK_WIDGET ( entry_ch ), FALSE, FALSE, 0 );
 
-	GtkComboBoxText *combo_leng = (GtkComboBoxText *)gtk_combo_box_text_new ();
+	GtkComboBoxText *combo_lang = (GtkComboBoxText *)gtk_combo_box_text_new ();
 
-	dtv_gst_add_audio_track ( base, combo_leng );
+	dtv_gst_add_audio_track ( base, combo_lang );
 
-	g_signal_connect (G_OBJECT (combo_leng), "changed", G_CALLBACK ( info_combo_leng_changed ), base );
+	g_signal_connect (G_OBJECT (combo_lang), "changed", G_CALLBACK ( info_combo_lang_changed ), base );
 
-	gtk_box_pack_start ( v_box, GTK_WIDGET ( combo_leng ), FALSE, FALSE, 0 );
+	gtk_box_pack_start ( v_box, GTK_WIDGET ( combo_lang ), FALSE, FALSE, 0 );
 
 	uint j = 0, delsys = 0;
 
@@ -98,6 +99,10 @@ static GtkBox * info_tv ( Base *base )
 
 		const char *set = scan_get_info ( splits[0] );
 
+		if ( g_str_has_prefix ( splits[0], "lnb-lof1" ) ) set = "   LO1  MHz";
+		if ( g_str_has_prefix ( splits[0], "lnb-lof2" ) ) set = "   LO2  MHz";
+		if ( g_str_has_prefix ( splits[0], "lnb-slof" ) ) set = "   Switch  MHz";
+
 		GtkLabel *label = (GtkLabel *)gtk_label_new ( set );
 		gtk_widget_set_halign ( GTK_WIDGET ( label ), GTK_ALIGN_START );
 
@@ -107,7 +112,7 @@ static GtkBox * info_tv ( Base *base )
 
 		if ( g_strrstr ( splits[0], "polarity" ) ) set_v = splits[1];
 
-		if ( g_str_has_prefix ( splits[0], "frequency" ) )
+		if ( g_str_has_prefix ( splits[0], "frequency" ) || g_str_has_prefix ( splits[0], "lnb-lo" ) || g_str_has_prefix ( splits[0], "lnb-sl" ) )
 		{
 			long dat = atol ( splits[1] );
 
@@ -118,7 +123,7 @@ static GtkBox * info_tv ( Base *base )
 
 			char *str = g_strdup_printf ( "%ld", dat );
 
-			label = (GtkLabel *)gtk_label_new ( str );
+				label = (GtkLabel *)gtk_label_new ( str );
 
 			free ( str );
 		}
@@ -139,64 +144,57 @@ static GtkBox * info_tv ( Base *base )
 	return v_box;
 }
 
-static char * info_get_str_vat ( Base *base, char *get_tag, int n_all, char *data )
+static char * info_get_str_vat ( Base *base, char *get_tag, int n_cur, const char *metadata, const char *metadata_2 )
 {
-	char *name = NULL;
+	char *str = NULL, *str_2 = NULL, *ret_str = NULL;
 
     GstTagList *tags;
 
-    int i;
-	for ( i = 0; i < n_all; i++ )
-    {
-		g_signal_emit_by_name ( base->player->playbin, get_tag, i, &tags );
-
-        if ( tags )
-        {
-			const GValue *value = gst_tag_list_get_value_index ( tags, data, 0 );
-
-            if ( value && G_VALUE_HOLDS_STRING (value) )
-            {
-				if ( g_strrstr ( g_value_get_string (value), " (" ) )
-				{
-					char **lines = g_strsplit ( g_value_get_string (value), " (", 0 );
-
-					name = g_strdup ( lines[0] );
-
-					g_strfreev ( lines );
-				}
-				else
-				{
-					name = g_strdup ( g_value_get_string (value) );
-				}
-			}
-			else
-				name = g_strdup_printf ( "№ %d", i + 1 );
-		}
-
-		if ( name == NULL ) name = g_strdup_printf ( "№ %d", i + 1 );
-    }
-
-    return name;
-}
-static char * info_get_int_vat ( GstElement *element, char *get_tag, int c_all, char *data )
-{
-	char *name = NULL;
-
-    GstTagList *tags;
-
-    g_signal_emit_by_name ( element, get_tag, c_all, &tags );
+	g_signal_emit_by_name ( base->player->playbin, get_tag, n_cur, &tags );
 
 	if ( tags )
-    {
-		const GValue *value = gst_tag_list_get_value_index ( tags, data, 0 );
-
-		if ( value && G_VALUE_HOLDS_UINT (value) )
+	{
+		if ( gst_tag_list_get_string ( tags, metadata, &str ) )
 		{
-			name = g_strdup_printf ( "%d Kbits/s", g_value_get_uint (value) / 1000 );
+			if ( g_strrstr ( str, " (" ) )
+			{
+				char **lines = g_strsplit ( str, " (", 0 );
+
+					g_free ( str );
+					str = g_strdup ( lines[0] );
+
+				g_strfreev ( lines );
+			}
+
+			if ( metadata_2 && gst_tag_list_get_string ( tags, metadata_2, &str_2 ) )
+				{ ret_str = g_strdup_printf ( "%s   %s", str_2, str ); g_free ( str_2 ); }
+			else
+				ret_str = ( g_str_has_prefix ( get_tag, "get-audio" ) ) ? g_strdup_printf ( "%d   %s", n_cur + 1, str ) : g_strdup_printf ( "%s", str );
+
+			g_free ( str );
 		}
 	}
 
-    return name;
+	if ( ret_str == NULL ) ret_str = g_strdup_printf ( "№ %d", n_cur + 1 );
+
+    return ret_str;
+}
+static char * info_get_int_vat ( GstElement *element, char *get_tag, int n_cur, char *metadata )
+{
+	char *ret_str = NULL;
+	uint rate;
+
+    GstTagList *tags;
+
+    g_signal_emit_by_name ( element, get_tag, n_cur, &tags );
+
+	if ( tags )
+    {
+		if ( gst_tag_list_get_uint ( tags, metadata, &rate ) ) 
+			ret_str = g_strdup_printf ( "%d Kbits/s", rate / 1000 );
+	}
+
+    return ret_str;
 }
 
 static void info_changed_combo_video ( GtkComboBox *combo, Base *base )
@@ -211,18 +209,21 @@ static void info_changed_combo_text ( GtkComboBox *combo, Base *base )
 {
 	g_object_set ( base->player->playbin, "current-text", gtk_combo_box_get_active (combo), NULL );	
 }
-static void info_change_state_subtitle ( GtkButton *button, Base *base )
+static void info_change_state_subtitle ( G_GNUC_UNUSED GtkButton *button, Base *base )
 {
 	base->player->state_subtitle = !base->player->state_subtitle;
 
-	player_set_subtitle ( base );
+	player_set_subtitle ( base, base->player->state_subtitle );
 	// g_object_set ( base->player->playbin, "flags", ( base->player->state_subtitle ) ? 1559 : 1555, NULL );
+}
+static void info_change_hide_show_subtitle ( GtkButton *button, GtkComboBoxText *combo )
+{
+	gboolean sensitive = !gtk_widget_get_sensitive ( GTK_WIDGET ( combo ) );
 
-	GtkImage *image = base_create_image ( ( base->player->state_subtitle ) ? "helia-set" : "helia-unset", 16 );
+	gtk_widget_set_sensitive ( GTK_WIDGET ( combo ), sensitive );
 
+	GtkImage *image = base_create_image ( ( sensitive ) ? "helia-set" : "helia-unset", 16 );
 	gtk_button_set_image ( button, GTK_WIDGET ( image ) );
-
-	gtk_widget_set_sensitive ( GTK_WIDGET ( base->player->combo_subtitle ), base->player->state_subtitle );
 }
 
 static gboolean info_update_bitrate_video ( Base *base )
@@ -234,7 +235,7 @@ static gboolean info_update_bitrate_video ( Base *base )
 
 	char *bitrate_video = info_get_int_vat ( base->player->playbin, "get-video-tags", c_video, GST_TAG_BITRATE );
 
-	gtk_label_set_text ( base->player->label_video, ( bitrate_video ) ? bitrate_video : "0 Kbits/s" );
+	gtk_label_set_text ( base->player->label_video, ( bitrate_video ) ? bitrate_video : "? Kbits/s" );
 
 	if ( bitrate_video ) g_free ( bitrate_video );
 
@@ -257,7 +258,7 @@ static gboolean info_update_bitrate_audio ( Base *base )
 
 	char *bitrate_audio = info_get_int_vat ( base->player->playbin, "get-audio-tags", c_audio, GST_TAG_BITRATE );
 
-	gtk_label_set_text ( base->player->label_audio, ( bitrate_audio ) ? bitrate_audio : "0 Kbits/s" );
+	gtk_label_set_text ( base->player->label_audio, ( bitrate_audio ) ? bitrate_audio : "? Kbits/s" );
 
 	if ( bitrate_audio ) g_free ( bitrate_audio );
 
@@ -312,7 +313,8 @@ char * info_get_title_artist ( Base *base )
 		}
 		else
 		{
-			title_new = g_strdup ( artist );
+			if ( artist )
+				title_new = g_strdup ( artist );
 		}
 	}
 
@@ -426,6 +428,7 @@ static void info_entry_title_save ( GtkEntry *entry, GtkEntryIconPosition icon_p
 static GtkBox * info_mp ( Base *base )
 {
 	GtkBox *v_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	gtk_box_set_spacing ( v_box, 5 );
 	gtk_widget_set_margin_top   ( GTK_WIDGET ( v_box ), 10 );
 	gtk_widget_set_margin_start ( GTK_WIDGET ( v_box ), 10 );
 	gtk_widget_set_margin_end   ( GTK_WIDGET ( v_box ), 10 );
@@ -473,20 +476,16 @@ static GtkBox * info_mp ( Base *base )
     g_object_get ( base->player->playbin, "current-audio", &c_audio, NULL );
     g_object_get ( base->player->playbin, "current-text",  &c_text,  NULL );
 
-    char *codec_video = info_get_str_vat ( base, "get-video-tags", n_video, GST_TAG_VIDEO_CODEC   );
-    char *codec_audio = info_get_str_vat ( base, "get-audio-tags", n_audio, GST_TAG_AUDIO_CODEC   );
-    char *lang_text   = info_get_str_vat ( base, "get-text-tags",  n_text,  GST_TAG_LANGUAGE_CODE );
-
 	char *bitrate_video = info_get_int_vat ( base->player->playbin, "get-video-tags", c_video, GST_TAG_BITRATE );
-	char *bitrate_audio = info_get_int_vat ( base->player->playbin, "get-audio-tags", c_video, GST_TAG_BITRATE );
+	char *bitrate_audio = info_get_int_vat ( base->player->playbin, "get-audio-tags", c_audio, GST_TAG_BITRATE );
 
 	struct data { const char *name; uint n_avt; uint c_avt; const char *info; void (*f)(); } data_n[] =
 	{
-		{ "helia-video",     n_video, c_video, codec_video,   info_changed_combo_video  },
-		{ " ",   		0,       0,       bitrate_video, info_bitrate_video },
-		{ "helia-audio",     n_audio, c_audio, codec_audio,   info_changed_combo_audio  },
-		{ " ",   		0,       0,       bitrate_audio, info_bitrate_audio },
-		{ "helia-subtitles", n_text,  c_text,  lang_text,     info_changed_combo_text   }
+		{ "helia-video", 	 n_video, c_video, NULL,   info_changed_combo_video  },
+		{ " ",   			 0,       0,       bitrate_video, info_bitrate_video },
+		{ "helia-audio", 	 n_audio, c_audio, NULL,   info_changed_combo_audio  },
+		{ " ",  			 0,       0,       bitrate_audio, info_bitrate_audio },
+		{ "helia-subtitles", n_text,  c_text,  NULL,   info_changed_combo_text   }
 	};
 
     uint c = 0, i = 0;
@@ -502,7 +501,15 @@ static GtkBox * info_mp ( Base *base )
 
             for ( i = 0; i < data_n[c].n_avt; i++ )
             {
-				gtk_combo_box_text_append_text ( combo, data_n[c].info );
+				char *teg_info = NULL; // media metadata
+
+				if ( c == 0 ) teg_info = info_get_str_vat ( base, "get-video-tags", i, GST_TAG_VIDEO_CODEC,   NULL );
+				if ( c == 2 ) teg_info = info_get_str_vat ( base, "get-audio-tags", i, GST_TAG_AUDIO_CODEC,   GST_TAG_LANGUAGE_CODE );
+				if ( c == 4 ) teg_info = info_get_str_vat ( base, "get-text-tags",  i, GST_TAG_LANGUAGE_CODE, NULL );
+
+				gtk_combo_box_text_append_text ( combo, teg_info );
+
+				g_free ( teg_info );
 			}
 
 			gtk_combo_box_set_active ( GTK_COMBO_BOX ( combo ), data_n[c].c_avt );
@@ -512,24 +519,24 @@ static GtkBox * info_mp ( Base *base )
 			if ( c == 4 && data_n[c].n_avt > 0 )
 			{
 				h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
-
-				base->player->combo_subtitle = combo;
+				gtk_box_set_spacing ( h_box, 5 );
 
 				GtkButton *button = base_set_image_button ( ( base->player->state_subtitle ) ? "helia-set" : "helia-unset", 16 );
-				g_signal_connect ( button, "clicked", G_CALLBACK ( info_change_state_subtitle ), base );
+				g_signal_connect ( button, "clicked", G_CALLBACK ( info_change_state_subtitle     ), base  );
+				g_signal_connect ( button, "clicked", G_CALLBACK ( info_change_hide_show_subtitle ), combo );
 
 				gtk_box_pack_start ( h_box, GTK_WIDGET ( combo  ), TRUE, TRUE, 0 );
 				gtk_box_pack_start ( h_box, GTK_WIDGET ( button ), TRUE, TRUE, 0 );
 
 				gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( h_box ), 1, c, 1, 1 );
-				gtk_widget_set_sensitive ( GTK_WIDGET ( base->player->combo_subtitle ), base->player->state_subtitle );
+				gtk_widget_set_sensitive ( GTK_WIDGET ( combo ), base->player->state_subtitle );
 			}
 			else
 				gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( combo ), 1, c, 1, 1 );
         }
         else
         {
-            GtkLabel *label = (GtkLabel *)gtk_label_new ( ( data_n[c].info ) ? data_n[c].info : "0 Kbits/s" );
+            GtkLabel *label = (GtkLabel *)gtk_label_new ( ( data_n[c].info ) ? data_n[c].info : "? Kbits/s" );
             gtk_widget_set_halign ( GTK_WIDGET ( label ), GTK_ALIGN_START );
             gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( label ), 1, c, 1, 1 );
 
@@ -539,10 +546,6 @@ static GtkBox * info_mp ( Base *base )
 
     if ( bitrate_video ) g_free ( bitrate_video );
     if ( bitrate_audio ) g_free ( bitrate_audio );
-
-    g_free ( codec_video );
-    g_free ( codec_audio );
-    g_free ( lang_text );
 
 	gtk_box_pack_start ( v_box, GTK_WIDGET ( grid ), TRUE, TRUE, 10 );
 

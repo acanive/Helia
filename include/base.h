@@ -62,16 +62,17 @@ struct _Scan
 	GtkTreeView *treeview_scan;
 	GtkLabel *dvb_device, *all_channels;
 
+	GtkButton *button_lnb_dvb, *button_lnb_isdb;
+
 	GtkComboBoxText *combo_delsys;
 	ulong desys_signal_id;
 
 	uint adapter_set, frontend_set, delsys_set, lnb_type;
-
-	Level level_scan;
+	uint id_time_source;
 
 	gboolean scan_quit;
 
-	GtkEntry *entry_convert;
+	Level level_scan;
 
 	MpegTs mpegts;
 
@@ -94,7 +95,7 @@ struct _DigitalTV
 
 	double volume;
 	gboolean checked_video, panel_quit, scrambling;
-	gboolean rec_ses, rec_status, rec_pulse;
+	gboolean enable_rec, rec_ses, rec_status, rec_pulse;
 
 	Level level_base, level_panel;
 
@@ -105,7 +106,7 @@ struct _DigitalTV
 
 	uint sid, set_audio_track;
 
-	time_t t_cur_tv, t_start_tv;
+	time_t t_cur_tv, t_start_tv, t_cur_ne_tv;
 };
 
 
@@ -115,7 +116,7 @@ struct _Slider
 {
 	GtkScale *slider;
 	GtkLabel *lab_pos, *lab_dur;
-	GtkLabel *rec_buf;
+	GtkLabel *rec_buf, *rec_sts;
 
 	ulong slider_signal_id;
 };
@@ -129,15 +130,15 @@ struct _Player
 
 	GtkDrawingArea *video;
 	GtkTreeView *treeview;
-	GtkEntry *search_entry;
+	GtkEntry *search_entry, *net_entry;
 
 	GtkBox *vbox_sw_mp, *h_box_slider_base, *h_box_slider_panel;
 	GtkVolumeButton *volbutton;
 
 	double volume;
 	gboolean next_repeat, state_subtitle, panel_quit;
-	gboolean record, rec_status, is_live, double_clicked;
-	gboolean vis_plugin;
+	gboolean record, record_f, rec_status, rec_video_enable;
+	gboolean double_clicked, vis_plugin, is_live, set_state;
 
 	char *file_play;
 	gint64 duration_old;
@@ -145,11 +146,25 @@ struct _Player
 	Slider slider_base, slider_panel;
 
 	GtkLabel *label_audio, *label_video;
-	GtkComboBoxText *combo_subtitle;
 
-	time_t t_cur_mp, t_start_mp;
+	time_t t_cur_mp, t_start_mp, t_cur_ne;
 };
 
+typedef struct _RecEnc RecEnc;
+
+struct _RecEnc
+{
+	GtkSwitch *gswitch;
+
+	GtkEntry *audio_enc, *audio_prop;
+	GtkEntry *video_enc, *video_prop;
+	GtkEntry *muxer_enc;
+
+	char *str_audio_enc, *str_video_enc, *str_muxer_enc;
+	char *str_audio_prop, *str_video_prop;
+
+	gboolean rec_enc_prop;
+};
 
 typedef struct _Base Base;
 
@@ -158,9 +173,13 @@ struct _Base
 	GtkWindow *window;
 	GdkPixbuf *pixbuf_mp, *pixbuf_tv;
 
+	GtkLabel *pref_rec;
+
 	Player *player;
 
 	DigitalTV *dtv;
+
+	RecEnc rec_enc;
 
 	double opacity_panel, opacity_eq, opacity_win;
 

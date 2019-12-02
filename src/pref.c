@@ -31,12 +31,12 @@ void about_win ( GtkWindow *window )
 	const char *license     = "This program is free software. \n\nGNU Lesser General Public License \nwww.gnu.org/licenses/lgpl.html";
 
 	gtk_about_dialog_set_program_name ( dialog, "Helia" );
-	gtk_about_dialog_set_version ( dialog, "8.8" );
+	gtk_about_dialog_set_version ( dialog, "9.9" );
 	gtk_about_dialog_set_license ( dialog, license );
 	gtk_about_dialog_set_authors ( dialog, authors );
 	gtk_about_dialog_set_artists ( dialog, artists );
 	gtk_about_dialog_set_translator_credits ( dialog, translators );
-	gtk_about_dialog_set_website ( dialog,   "https://github.com/vl-nix/Helia" );
+	gtk_about_dialog_set_website ( dialog,   "https://www.opencode.net/vl-nix/helia" );
 	gtk_about_dialog_set_copyright ( dialog, "Copyright 2019 Helia" );
 	gtk_about_dialog_set_comments  ( dialog, "Media Player & IPTV & Digital TV \nDVB-T2/S2/C, ATSC, DTMB, ISDB" );
 
@@ -45,6 +45,76 @@ void about_win ( GtkWindow *window )
 	gtk_dialog_run ( GTK_DIALOG (dialog) );
 
 	gtk_widget_destroy ( GTK_WIDGET (dialog) );
+}
+
+static void win_open_net_play ( const char *file, Base *base )
+{
+	if ( file && strlen ( file ) > 0 )
+		treeview_add_file ( base, file, FALSE, TRUE );
+}
+static void win_open_net_entry_activate ( GtkEntry *entry, Base *base )
+{
+	win_open_net_play ( gtk_entry_get_text ( entry ), base );
+}
+static void win_open_net_button_activate ( G_GNUC_UNUSED GtkButton *button, Base *base )
+{
+	win_open_net_play ( gtk_entry_get_text ( base->player->net_entry ), base );
+}
+
+static void win_open_net_clear ( GtkEntry *entry, G_GNUC_UNUSED GtkEntryIconPosition icon_pos, G_GNUC_UNUSED GdkEvent *event, G_GNUC_UNUSED gpointer data )
+{
+	gtk_entry_set_text ( GTK_ENTRY ( entry ), "" );
+}
+
+void win_open_net ( Base *base )
+{
+	GtkWindow *window =      (GtkWindow *)gtk_window_new ( GTK_WINDOW_TOPLEVEL );
+	gtk_window_set_transient_for ( window, base->window );
+	gtk_window_set_modal     ( window, TRUE );
+	gtk_window_set_position  ( window, GTK_WIN_POS_CENTER_ON_PARENT );
+	gtk_window_set_title     ( window, "" );
+
+	GdkPixbuf *pixbuf = gtk_icon_theme_load_icon ( gtk_icon_theme_get_default (), 
+					    "helia-net", 48, GTK_ICON_LOOKUP_USE_BUILTIN, NULL );
+
+	gtk_window_set_icon ( window, pixbuf );
+
+	if ( pixbuf ) g_object_unref ( pixbuf );
+
+	GtkBox *m_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL,   0 );
+
+	GtkBox *h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_box_set_spacing ( h_box, 10 );
+
+	GtkEntry *entry = (GtkEntry *)gtk_entry_new ();
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-clear" );
+	g_signal_connect ( entry, "icon-press", G_CALLBACK ( win_open_net_clear ), NULL );
+	g_signal_connect ( entry, "activate", G_CALLBACK ( win_open_net_entry_activate ), base );
+	g_signal_connect_swapped ( entry, "activate", G_CALLBACK ( gtk_widget_destroy ), window );
+
+	gtk_widget_set_size_request ( GTK_WIDGET (entry), 400, -1 );
+
+	base->player->net_entry = entry;
+
+	GtkButton *button_activate = (GtkButton *)gtk_button_new_from_icon_name ( "helia-ok", GTK_ICON_SIZE_BUTTON );
+	g_signal_connect ( button_activate, "clicked", G_CALLBACK ( win_open_net_button_activate ), base );
+	g_signal_connect_swapped ( button_activate, "clicked", G_CALLBACK ( gtk_widget_destroy ), window );
+
+	gtk_box_pack_start ( GTK_BOX ( h_box ), GTK_WIDGET ( entry ), TRUE, TRUE, 0 );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( button_activate ), TRUE, TRUE, 0 );
+
+	GtkButton *button_close = (GtkButton *)gtk_button_new_from_icon_name ( "helia-exit", GTK_ICON_SIZE_BUTTON );
+	g_signal_connect_swapped ( button_close, "clicked", G_CALLBACK ( gtk_widget_destroy ), window );
+
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( button_close ), TRUE, TRUE, 0 );
+
+	gtk_box_pack_end ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 5 );
+
+	gtk_container_set_border_width ( GTK_CONTAINER ( m_box ), 10 );
+	gtk_container_add   ( GTK_CONTAINER ( window ), GTK_WIDGET ( m_box ) );
+	gtk_widget_show_all ( GTK_WIDGET ( window ) );
+
+	gtk_widget_set_opacity ( GTK_WIDGET ( window ), base->opacity_win );
 }
 
 /* Returns a newly-allocated string holding the result. Free with free() */
@@ -369,22 +439,61 @@ static void pref_changed_resize_icon ( GtkRange *range, Base *base )
 	base->size_icon = (guint)gtk_range_get_value ( range );
 }
 
-static void pref_changed_sw ( GObject *gobject, G_GNUC_UNUSED GParamSpec *pspec, Base *base )
+static void pref_set_label_sw_rec ( Base *base )
+{
+	if ( !base->dtv->enable_rec )
+	{
+		gtk_label_set_text ( base->pref_rec, "  ◉  " );
+
+		return;
+	}
+
+	const char *format = "<span foreground=\"#ff0000\">  ◉  </span>";
+
+	char *markup = g_markup_printf_escaped ( format, "  ◉  " );
+
+		gtk_label_set_markup ( base->pref_rec, markup );
+
+	g_free ( markup );
+}
+
+static void pref_changed_sw_rec ( GObject *gobject, G_GNUC_UNUSED GParamSpec *pspec, Base *base )
+{
+	base->dtv->enable_rec = gtk_switch_get_state ( GTK_SWITCH ( gobject ) );
+
+	pref_set_label_sw_rec ( base );
+
+	if ( !base->dtv->enable_rec) gtk_switch_set_state ( base->rec_enc.gswitch, base->dtv->enable_rec );
+
+	gtk_widget_set_sensitive ( GTK_WIDGET ( base->rec_enc.gswitch ), base->dtv->enable_rec );
+}
+
+static GtkSwitch * pref_create_switch_rec ( Base *base )
+{
+	GtkSwitch *gswitch = (GtkSwitch *)gtk_switch_new ();
+	gtk_switch_set_state ( gswitch, base->dtv->enable_rec );
+	g_signal_connect ( gswitch, "notify::active", G_CALLBACK ( pref_changed_sw_rec ), base );
+
+	return gswitch;
+}
+
+static void pref_changed_sw_dark ( GObject *gobject, G_GNUC_UNUSED GParamSpec *pspec, Base *base )
 {
 	base->dark_theme = gtk_switch_get_state ( GTK_SWITCH ( gobject ) );
 	g_object_set ( gtk_settings_get_default(), "gtk-application-prefer-dark-theme", base->dark_theme, NULL );
 }
 
-static GtkSwitch * pref_create_switch ( Base *base )
+static GtkSwitch * pref_create_switch_dark ( Base *base )
 {
 	GtkSwitch *gswitch = (GtkSwitch *)gtk_switch_new ();
 	gtk_switch_set_state ( gswitch, base->dark_theme );
-	g_signal_connect ( gswitch, "notify::active", G_CALLBACK ( pref_changed_sw ), base );
+	g_signal_connect ( gswitch, "notify::active", G_CALLBACK ( pref_changed_sw_dark ), base );
 
 	return gswitch;
 }
 
-static void pref_create_entry ( Base *base, const char *text, const char *set_text, void (*f)(), GtkBox *h_box, gboolean swe )
+static void pref_create_entry ( Base *base, const char *text, const char *set_text, void (*f)(), GtkBox *h_box, 
+								gboolean swe, GtkWidget *label_swe, GtkSwitch * (*fs)(Base *) )
 {
 	GtkImage *image = base_create_image ( text, 32 );
 	gtk_widget_set_halign ( GTK_WIDGET ( image ), GTK_ALIGN_START );
@@ -405,11 +514,256 @@ static void pref_create_entry ( Base *base, const char *text, const char *set_te
 
 	if ( swe )
 	{
-		label = (GtkLabel *)gtk_label_new ( "  ⏾  " ); // 🌞 / ⏾
-		gtk_box_pack_start ( h_box, GTK_WIDGET ( label ), FALSE, FALSE, 0 );
-		gtk_box_pack_start ( h_box, GTK_WIDGET ( pref_create_switch ( base ) ), TRUE, TRUE, 0 );
+		gtk_box_pack_start ( h_box, GTK_WIDGET ( label_swe   ), FALSE, FALSE, 0 );
+		gtk_box_pack_start ( h_box, GTK_WIDGET ( fs ( base ) ), TRUE,  TRUE,  0 );
 	}
 }
+
+
+static gboolean pref_element_factory_check_enc ( GtkEntry *entry, const char *type )
+{
+    const gchar *text = gtk_entry_get_text ( entry );
+
+    gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_PRIMARY, "helia-info" );
+	gtk_entry_set_icon_tooltip_text ( GTK_ENTRY ( entry ), GTK_ENTRY_ICON_PRIMARY, type );
+
+    GstElementFactory *element_find = NULL;
+
+    gboolean ret = FALSE;
+
+    if ( gtk_entry_get_text_length ( entry ) > 0 )
+    {
+        element_find = gst_element_factory_find ( text );
+
+		if ( element_find )
+		{
+			const char *metadata = gst_element_factory_get_metadata ( element_find, GST_ELEMENT_METADATA_KLASS );
+
+			// g_print ( "%s: %s | metadata %s | type %s \n", __func__, gtk_entry_get_text ( entry ), metadata, type );
+
+			if ( g_strrstr ( metadata, type ) ) ret = TRUE;
+
+			if ( ret )
+				gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-ok" );
+			else
+				gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-warning" );
+		}
+		else
+			gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-warning" );
+    }
+
+    return ret;
+}
+static void pref_changed_entry_rec_enc_audio ( GtkEntry *entry, Base *base )
+{
+	if ( pref_element_factory_check_enc ( entry, "Encoder/Audio" ) ) // GST_ELEMENT_FACTORY_TYPE_AUDIO_ENCODER
+	{
+		const char *text = gtk_entry_get_text ( entry );
+
+		g_free ( base->rec_enc.str_audio_enc );
+
+		base->rec_enc.str_audio_enc = g_strdup ( text );
+	}
+}
+static void pref_changed_entry_rec_enc_video ( GtkEntry *entry, Base *base )
+{
+	if ( pref_element_factory_check_enc ( entry, "Encoder/Video" ) ) // GST_ELEMENT_FACTORY_TYPE_VIDEO_ENCODER
+	{
+		const char *text = gtk_entry_get_text ( entry );
+
+		g_free ( base->rec_enc.str_video_enc );
+
+		base->rec_enc.str_video_enc = g_strdup ( text );
+	}
+}
+static void pref_changed_entry_rec_enc_muxer ( GtkEntry *entry, Base *base )
+{
+	if ( pref_element_factory_check_enc ( entry, "Muxer" ) ) // GST_ELEMENT_FACTORY_TYPE_MUXER
+	{
+		const char *text = gtk_entry_get_text ( entry );
+
+		g_free ( base->rec_enc.str_muxer_enc );
+
+		base->rec_enc.str_muxer_enc = g_strdup ( text );
+	}
+}
+
+
+static gboolean pref_gst_element_find_property ( GstElement *element, const char *prop )
+{
+	gboolean find_prop = FALSE;
+
+	if ( element && g_object_class_find_property ( G_OBJECT_GET_CLASS ( element ), prop ) )
+		find_prop = TRUE;
+	else
+		find_prop = FALSE;
+
+	return find_prop;
+}
+static gboolean pref_check_prop_gst_element ( const char *prop, GtkEntry *entry )
+{
+	gboolean ret = FALSE;
+
+	GstElementFactory *factory = gst_element_factory_find ( gtk_entry_get_text ( entry ) );
+
+	if ( factory == NULL ) return ret;
+
+	GstElement *element = gst_element_factory_create ( factory, NULL );
+
+	if ( element )
+	{
+		if ( pref_gst_element_find_property ( element, prop ) ) ret = TRUE;
+
+		gst_object_unref ( element );
+	}
+
+    return ret;
+}
+static void pref_entry_rec_check_prop_set_icon ( GtkEntry *entry, GtkEntry *entry_enc )
+{
+	uint res = 0;
+
+	gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_PRIMARY, "helia-info" );
+
+	gtk_entry_set_icon_tooltip_text ( GTK_ENTRY ( entry ), GTK_ENTRY_ICON_PRIMARY, 
+		"Type=Property=Value[space]\n    Type[int|uint|float|bool|char]\nExample:\n    uint=bitrate=1000 float=quality=0,5 bool=vbr=true char=option-string=..." );
+
+	if ( gtk_entry_get_text_length ( entry ) > 0 )
+	{
+		const char *text = gtk_entry_get_text ( entry );
+
+		if ( g_strrstr ( text, "=" ) )
+		{
+			char **fields = g_strsplit ( text, " ", 0 );
+			uint j = 0, numfields = g_strv_length ( fields );
+
+			for ( j = 0; j < numfields; j++ )
+			{
+				char **splits = g_strsplit ( fields[j], "=", 0 );
+				uint  numsplits = g_strv_length ( splits );
+
+				if ( numsplits > 1 && pref_check_prop_gst_element ( splits[1], entry_enc ) )
+					g_debug ( "%s: prop  %s  Ok ", __func__, splits[1] );
+				else
+					{ res++; g_warning ( "%s:: Error: prop  %s ", __func__, splits[1] ); }
+
+				g_strfreev ( splits );
+			}
+
+			g_strfreev ( fields );
+		}
+	}
+
+	if ( res == 0 )
+		gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-ok" );
+	else
+		gtk_entry_set_icon_from_icon_name ( entry, GTK_ENTRY_ICON_SECONDARY, "helia-warning" );
+}
+static void pref_changed_entry_rec_prop_audio ( GtkEntry *entry, Base *base )
+{
+	const char *text = gtk_entry_get_text ( entry );
+
+	if ( gtk_entry_get_text_length ( entry ) > 0 )
+	{
+		pref_entry_rec_check_prop_set_icon ( entry, base->rec_enc.audio_enc );
+
+		g_free ( base->rec_enc.str_audio_prop );
+
+		base->rec_enc.str_audio_prop = g_strdup ( text );
+	}
+}
+static void pref_changed_entry_rec_prop_video ( GtkEntry *entry, Base *base )
+{
+	const char *text = gtk_entry_get_text ( entry );
+
+	if ( gtk_entry_get_text_length ( entry ) > 0 )
+	{
+		pref_entry_rec_check_prop_set_icon ( entry, base->rec_enc.video_enc );
+
+		g_free ( base->rec_enc.str_video_prop );
+
+		base->rec_enc.str_video_prop = g_strdup ( text );
+	}
+}
+static GtkEntry * pref_create_entry_rec_enc_prop ( Base *base, const char *set_text, void (*f)(), gboolean enc_prop, const char *type, GtkEntry *entry_enc )
+{
+	GtkEntry *entry = (GtkEntry *)gtk_entry_new ();
+	gtk_entry_set_text ( entry, set_text );
+	g_signal_connect ( entry, "changed", G_CALLBACK ( f ), base );
+
+	if ( enc_prop ) pref_element_factory_check_enc ( entry, type ); else pref_entry_rec_check_prop_set_icon ( entry, entry_enc );
+
+	return entry;
+}
+static void pref_set_visible_rec_enc_prop ( Base *base, GtkWindow *window )
+{
+	gtk_widget_set_visible ( GTK_WIDGET ( base->rec_enc.audio_enc  ), base->rec_enc.rec_enc_prop );
+	gtk_widget_set_visible ( GTK_WIDGET ( base->rec_enc.audio_prop ), base->rec_enc.rec_enc_prop );
+	gtk_widget_set_visible ( GTK_WIDGET ( base->rec_enc.video_enc  ), base->rec_enc.rec_enc_prop );
+	gtk_widget_set_visible ( GTK_WIDGET ( base->rec_enc.video_prop ), base->rec_enc.rec_enc_prop );
+	gtk_widget_set_visible ( GTK_WIDGET ( base->rec_enc.muxer_enc  ), base->rec_enc.rec_enc_prop );
+
+	gtk_window_resize ( window, 200, 200 );
+}
+static void pref_changed_sw_rec_enc_prop ( GObject *gobject, G_GNUC_UNUSED GParamSpec *pspec, Base *base )
+{
+	base->rec_enc.rec_enc_prop = gtk_switch_get_state ( GTK_SWITCH ( gobject ) );
+
+	GtkWindow *window = GTK_WINDOW ( gtk_widget_get_toplevel ( GTK_WIDGET ( base->rec_enc.gswitch ) ) );
+	pref_set_visible_rec_enc_prop ( base, window );
+}
+
+static GtkSwitch * pref_create_switch_rec_enc_prop ( Base *base )
+{
+	GtkSwitch *gswitch = (GtkSwitch *)gtk_switch_new ();
+	gtk_switch_set_state ( gswitch, base->rec_enc.rec_enc_prop );
+	g_signal_connect ( gswitch, "notify::active", G_CALLBACK ( pref_changed_sw_rec_enc_prop ), base );
+
+	return gswitch;
+}
+static void pref_create_rec_enc_prop ( Base *base, GtkBox *v_box )
+{
+	GtkBox *h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_box_set_spacing ( h_box, 5 );
+
+	GtkLabel *label = (GtkLabel *)gtk_label_new ( " TS / Encoder " );
+	gtk_widget_set_halign ( GTK_WIDGET ( label ), GTK_ALIGN_START );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( label ), FALSE,  FALSE, 0 );
+
+	base->rec_enc.gswitch = pref_create_switch_rec_enc_prop ( base );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.gswitch ), TRUE,  TRUE,  0 );
+
+	gtk_box_pack_start ( v_box, GTK_WIDGET ( h_box ), TRUE, TRUE, 0 );
+	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_box_set_spacing ( h_box, 5 );
+
+	base->rec_enc.audio_enc = pref_create_entry_rec_enc_prop ( base, base->rec_enc.str_audio_enc, pref_changed_entry_rec_enc_audio, TRUE, "Encoder/Audio", NULL );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.audio_enc ), TRUE, TRUE, 0 );
+
+	base->rec_enc.audio_prop = pref_create_entry_rec_enc_prop ( base, base->rec_enc.str_audio_prop, pref_changed_entry_rec_prop_audio, FALSE, "Encoder/Audio", base->rec_enc.audio_enc );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.audio_prop ), TRUE, TRUE, 0 );
+
+	gtk_box_pack_start ( v_box, GTK_WIDGET ( h_box ), TRUE, TRUE, 0 );
+	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_box_set_spacing ( h_box, 5 );
+
+	base->rec_enc.video_enc = pref_create_entry_rec_enc_prop ( base, base->rec_enc.str_video_enc, pref_changed_entry_rec_enc_video, TRUE, "Encoder/Video", NULL );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.video_enc ), TRUE, TRUE, 0 );
+
+	base->rec_enc.video_prop = pref_create_entry_rec_enc_prop ( base, base->rec_enc.str_video_prop, pref_changed_entry_rec_prop_video, FALSE, "Encoder/Video", base->rec_enc.video_enc );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.video_prop ), TRUE, TRUE, 0 );
+
+	gtk_box_pack_start ( v_box, GTK_WIDGET ( h_box ), TRUE, TRUE, 0 );
+	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+
+	base->rec_enc.muxer_enc = pref_create_entry_rec_enc_prop ( base, base->rec_enc.str_muxer_enc, pref_changed_entry_rec_enc_muxer, TRUE, "Muxer", NULL );
+	gtk_box_pack_start ( h_box, GTK_WIDGET ( base->rec_enc.muxer_enc ), TRUE, TRUE, 0 );
+
+	gtk_box_pack_start ( v_box, GTK_WIDGET ( h_box ), TRUE, TRUE, 0 );
+
+	gtk_widget_set_sensitive ( GTK_WIDGET ( base->rec_enc.gswitch ), base->dtv->enable_rec );
+}
+
 
 static void pref_create_scale ( Base *base, const char *action, const char *element, double val, double min, double max, double step, 
 									void (*f)(), GtkBox *h_box, GtkWindow *window )
@@ -542,21 +896,26 @@ void pref_win ( Base *base )
 	GtkBox *m_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL,   0 );	
 	GtkBox *h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( gtk_label_new ( " " ) ), FALSE, FALSE, 0 );
-
-	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
-		pref_create_entry ( base, "helia-folder-rec", base->rec_dir, pref_set_rec_dir, h_box, FALSE );
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 0 );
-
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 		pref_create_combo ( base, "helia-locale", pref_changed_combo_lang, h_box );
 	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 5 );
 
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 		char *set_text = pref_get_prop ( "gtk-theme-name" );
-			pref_create_entry ( base, "helia-style", set_text, pref_set_theme, h_box, TRUE );
+			pref_create_entry ( base, "helia-style", set_text, pref_set_theme, h_box, TRUE, gtk_label_new ( "  ⏾  " ), pref_create_switch_dark );
 		g_free ( set_text );
 	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 0 );
+
+	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+		base->pref_rec = (GtkLabel *)gtk_label_new ( "  ◉  " );
+		pref_set_label_sw_rec ( base );
+		pref_create_entry ( base, "helia-record", base->rec_dir, pref_set_rec_dir, h_box, TRUE, GTK_WIDGET ( base->pref_rec ), pref_create_switch_rec );
+	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 5 );
+
+	GtkBox *vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+		gtk_box_set_spacing ( vbox, 5 );
+		pref_create_rec_enc_prop ( base, vbox );
+	gtk_box_pack_start ( m_box, GTK_WIDGET ( vbox ), FALSE, FALSE, 0 );
 
 	gtk_box_pack_start ( m_box, GTK_WIDGET ( gtk_label_new ( " " ) ), FALSE, FALSE, 0 );
 
@@ -582,15 +941,11 @@ void pref_win ( Base *base )
 
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 		pref_create_spin ( base, h_box );
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 5 );
-
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( gtk_label_new ( " " ) ), FALSE, FALSE, 0 );
+	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 0 );
 
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 			pref_create_vis ( base, h_box );
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 0 );
-
-	gtk_box_pack_start ( m_box, GTK_WIDGET ( gtk_label_new ( " " ) ), FALSE, FALSE, 0 );
+	gtk_box_pack_start ( m_box, GTK_WIDGET ( h_box ), FALSE, FALSE, 5 );
 
 	h_box = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
 
@@ -603,6 +958,8 @@ void pref_win ( Base *base )
 	gtk_container_set_border_width ( GTK_CONTAINER ( m_box ), 10 );
 	gtk_container_add   ( GTK_CONTAINER ( window ), GTK_WIDGET ( m_box ) );
 	gtk_widget_show_all ( GTK_WIDGET ( window ) );
+
+	pref_set_visible_rec_enc_prop ( base, window );
 
 	gtk_widget_set_opacity ( GTK_WIDGET ( window ), base->opacity_win );
 }
@@ -625,8 +982,8 @@ static GtkBox * keyb_win_create_switch ( Base *base, const char *name )
 	GtkBox *hbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL,  0 );
 	gtk_widget_set_halign ( GTK_WIDGET ( hbox ), GTK_ALIGN_END );
 
-	gtk_box_pack_start ( hbox, GTK_WIDGET ( gswitch ), FALSE, FALSE,   10 );
-	gtk_box_pack_start ( hbox, GTK_WIDGET ( image   ), FALSE, FALSE,    0 );
+	gtk_box_pack_start ( hbox, GTK_WIDGET ( gswitch ), FALSE, FALSE, 10 );
+	gtk_box_pack_start ( hbox, GTK_WIDGET ( image   ), FALSE, FALSE,  0 );
 
 	return hbox;
 }
@@ -676,6 +1033,7 @@ void keyb_win ( Base *base )
 	{
 		{ "helia-add",          "Ctrl + O" },
 		{ "helia-add-folder",   "Ctrl + D" },
+		{ "helia-net", 			"Ctrl + L" },
 		{ NULL, NULL },
 		{ "helia-editor", 		"Ctrl + H" },
 		{ "helia-muted", 		"Ctrl + M" },
@@ -695,7 +1053,7 @@ void keyb_win ( Base *base )
 			continue;
 		}
 
-		if ( d == 9 )
+		if ( d == 10 )
 		{
 			GtkBox *hbox = keyb_win_create_play_pause ( "helia-play", "helia-pause" );
 			gtk_grid_attach ( GTK_GRID ( grid ), GTK_WIDGET ( hbox ), 0, d, 1, 1 );

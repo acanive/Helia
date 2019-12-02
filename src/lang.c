@@ -27,7 +27,10 @@ struct MsgGettext { const char *text; } MsgGettext_n[] =
 	{ N_( "Saturation" 		) },
 	{ N_( "Scanner" 		) },
 	{ N_( "Undefined" 		) },
-	{ N_( "Video equalizer" ) }
+	{ N_( "Video equalizer" ) },
+	{ N_( "Not available during recording." ) },
+	{ N_( "Live recording stopped." ) },
+	{ N_( "Live playback stopped." ) }
 };
 
 #else
@@ -91,7 +94,7 @@ uint lang_get_def ()
 
 	const gchar *lang = g_getenv ( "LANG" );
 	
-	g_debug ( "lang_get_def: %s ", lang );
+	g_debug ( "%s: %s ", __func__, lang );
 
 	uint res = 0, i = 0;
 

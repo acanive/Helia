@@ -5,9 +5,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: helia 8.2\n"
+"Project-Id-Version: helia 9.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-08-09 20:53+0300\n"
+"POT-Creation-Date: 2019-09-01 19:09+0300\n"
 "PO-Revision-Date: 2018-05-21 10:10+0300\n"
 "Last-Translator: <antohami@altlinux.org>\n"
 "Language-Team: Russian\n"
@@ -53,6 +53,18 @@ msgstr "Оттенок"
 #: ../src/lang.c:26
 msgid "Level dB"
 msgstr "Уровень  dB"
+
+#: ../src/lang.c:33
+msgid "Live playback stopped."
+msgstr "Воспроизведение прямого эфира остановлено."
+
+#: ../src/lang.c:32
+msgid "Live recording stopped."
+msgstr "Запись в прямом эфире остановлена."
+
+#: ../src/lang.c:31
+msgid "Not available during recording."
+msgstr "Недоступно во время записи."
 
 #: ../src/lang.c:27
 msgid "Saturation"

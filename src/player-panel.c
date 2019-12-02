@@ -15,6 +15,7 @@
 #include "info.h"
 #include "helia-eqa.h"
 #include "helia-eqv.h"
+#include "lang.h"
 
 
 static void player_panel_base ( G_GNUC_UNUSED GtkButton *button, Base *base )
@@ -102,7 +103,11 @@ static void player_panel_play ( GtkButton *button, Base *base )
 {
 	if ( !base->player->file_play ) return;
 
-	if ( base->player->record ) return;
+	if ( base->player->record )
+	{
+		base_message_dialog ( "", _i18n_ ( base, "Not available during recording." ), GTK_MESSAGE_INFO, base->window );
+		return;
+	}
 
 	const char *name = NULL;
 
@@ -160,7 +165,11 @@ static void player_panel_record ( G_GNUC_UNUSED GtkButton *button, Base *base )
 
 static void player_panel_info ( G_GNUC_UNUSED GtkButton *button, G_GNUC_UNUSED Base *base )
 {
-	if ( base->player->record ) return;
+	if ( base->player->record )
+	{
+		base_message_dialog ( "", _i18n_ ( base, "Not available during recording." ), GTK_MESSAGE_INFO, base->window );
+		return;
+	}
 
 	if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state != GST_STATE_PLAYING ) return;
 

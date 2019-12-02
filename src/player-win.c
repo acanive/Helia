@@ -46,19 +46,19 @@ static void player_win_draw_black ( GtkDrawingArea *widget, cairo_t *cr, GdkPixb
 
 static gboolean player_win_draw_check ( Base *base )
 {
-    if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_NULL ) return TRUE;
+	if ( base->player->pipeline_rec && base->player->record )
+	{
+		if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state < GST_STATE_PAUSED 
+		     || ( !base->player->rec_video_enable && !base->player->vis_plugin ) ) return TRUE;
+	}
+	else
+	{
+		uint n_video = 0;
+		g_object_get ( base->player->playbin, "n-video", &n_video, NULL );
 
-	if ( base->player->vis_plugin ) return FALSE;
-
-    uint n_video = 0;
-    g_object_get ( base->player->playbin, "n-video", &n_video, NULL );
-
-    if ( n_video == 0 )
-    {
-        if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_PLAYING ||
-             GST_ELEMENT_CAST ( base->player->playbin )->current_state == GST_STATE_PAUSED     )
-            return TRUE;
-    }
+		if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state < GST_STATE_PAUSED 
+		     || ( !n_video && !base->player->vis_plugin ) ) return TRUE;
+	}
 
     return FALSE;
 }
@@ -67,7 +67,7 @@ static gboolean player_win_draw ( GtkDrawingArea *widget, cairo_t *cr, Base *bas
 {
 	if ( player_win_draw_check ( base ) ) player_win_draw_black ( widget, cr, base->pixbuf_mp );
 
-	return TRUE;
+	return FALSE;
 }
 
 static void player_win_realize ( GtkDrawingArea *drawingarea, Base *base )
@@ -76,7 +76,7 @@ static void player_win_realize ( GtkDrawingArea *drawingarea, Base *base )
 
     base->player->window_hid = xid;
 
-    g_print ( "GDK_WINDOW_XID: %ld \n", base->player->window_hid );
+    g_debug ( "GDK_WINDOW_XID: %ld ", base->player->window_hid );
 }
 
 static void player_win_drag_in ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDragContext *ct, G_GNUC_UNUSED int x, G_GNUC_UNUSED int y, 
@@ -92,7 +92,7 @@ static void player_win_drag_in ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDragCont
 	{
 		char *path = base_uri_get_path ( uris[c] );
 
-		if ( !path ) { g_debug ( "player_win_drag_in: file NULL \n" ); free ( path ); continue; }
+		if ( path == NULL ) { g_debug ( "%s: file NULL", __func__ ); continue; }
 
 		if ( g_file_test ( path, G_FILE_TEST_IS_DIR ) )
 		{
@@ -179,11 +179,11 @@ static gboolean player_win_press_event ( GtkDrawingArea *drawing, GdkEventButton
 		return TRUE;
 	}
 
-	if ( base->pause_mouse )
+	if ( event->button == 1 )
 	{
 		base->player->double_clicked = FALSE;
 
-		if ( event->button == 1 )
+		if ( base->pause_mouse )
 			g_timeout_add ( 250, (GSourceFunc)player_check_double_clicked, base );
 	}
 
@@ -208,19 +208,70 @@ static gboolean player_win_scroll_event ( G_GNUC_UNUSED GtkDrawingArea *widget, 
 	return TRUE;
 }
 
+static gboolean player_win_notify_event ( GtkDrawingArea *drawing, G_GNUC_UNUSED GdkEventMotion *event, Base *base )
+{
+	time ( &base->player->t_cur_ne );
+
+	gdk_window_set_cursor ( gtk_widget_get_window ( GTK_WIDGET ( drawing ) ), 
+							gdk_cursor_new_for_display ( gdk_display_get_default (), GDK_ARROW ) );
+
+	return TRUE;
+}
+
+static gboolean player_set_cursor ( Base *base )
+{
+	if ( base->app_quit ) return FALSE;
+
+	if ( !gtk_window_is_active ( base->window ) ) return TRUE;
+
+	if ( !base->player->panel_quit ) return TRUE;
+
+	if ( base->player->pipeline_rec && base->player->record )
+	{
+		if ( GST_ELEMENT_CAST ( base->player->pipeline_rec )->current_state < GST_STATE_PAUSED 
+		     || ( !base->player->rec_video_enable && !base->player->vis_plugin ) ) return TRUE;
+	}
+	else
+	{
+		uint n_video = 0;
+		g_object_get ( base->player->playbin, "n-video", &n_video, NULL );
+
+		if ( GST_ELEMENT_CAST ( base->player->playbin )->current_state < GST_STATE_PAUSED 
+		     || ( !n_video && !base->player->vis_plugin ) ) return TRUE;
+	}
+
+	GdkWindow *window = gtk_widget_get_window ( GTK_WIDGET ( base->player->video ) );
+	GdkCursor *cursor = gdk_window_get_cursor ( window );
+
+	if ( cursor == NULL ) return TRUE;
+
+	time_t t_new_ne;
+	time ( &t_new_ne );
+
+	if ( ( t_new_ne - base->player->t_cur_ne ) < 3 ) return TRUE;
+
+	if ( gdk_cursor_get_cursor_type ( cursor ) != GDK_BLANK_CURSOR )
+		gdk_window_set_cursor ( window, gdk_cursor_new_for_display ( gdk_display_get_default (), GDK_BLANK_CURSOR ) );
+
+	return TRUE;
+}
+
 GtkDrawingArea * player_win_create ( Base *base )
 {
 	GtkDrawingArea *video_win = (GtkDrawingArea *)gtk_drawing_area_new ();
 	g_signal_connect ( video_win, "realize", G_CALLBACK ( player_win_realize ), base );
 	g_signal_connect ( video_win, "draw",    G_CALLBACK ( player_win_draw    ), base );
 
-	gtk_widget_set_events ( GTK_WIDGET ( video_win ), GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK  );
-	g_signal_connect ( video_win, "button-press-event", G_CALLBACK ( player_win_press_event  ), base );
-	g_signal_connect ( video_win, "scroll-event",       G_CALLBACK ( player_win_scroll_event ), base );
+	gtk_widget_set_events ( GTK_WIDGET ( video_win ), GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK );
+	g_signal_connect ( video_win, "button-press-event",  G_CALLBACK ( player_win_press_event  ), base );
+	g_signal_connect ( video_win, "scroll-event",        G_CALLBACK ( player_win_scroll_event ), base );
+	g_signal_connect ( video_win, "motion-notify-event", G_CALLBACK ( player_win_notify_event ), base );
 
 	gtk_drag_dest_set ( GTK_WIDGET ( video_win ), GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY );
 	gtk_drag_dest_add_uri_targets  ( GTK_WIDGET ( video_win ) );
 	g_signal_connect  ( video_win, "drag-data-received", G_CALLBACK ( player_win_drag_in ), base );
+
+	g_timeout_add_seconds ( 1, (GSourceFunc)player_set_cursor, base );
 
 	return video_win;
 }

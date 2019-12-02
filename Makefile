@@ -1,13 +1,13 @@
-# https://github.com/vl-nix/Helia
-# git clone git@github.com:vl-nix/Helia.git
+# https://www.opencode.net/vl-nix/helia
+# git clone https://www.opencode.net/vl-nix/helia.git or git clone https://github.com/vl-nix/helia.git
 
 program		= helia
-version		= 8.8
+version		= 9.9
 
-DEFS		= -DPACKAGE_NAME=\"$(program)\" -DPACKAGE_VERSION=\"$(version)\" -DPACKAGE=\"$(program)\" -DVERSION=\"$(version)\"
+DEFS		= -DPACKAGE=\"$(program)\" -DVERSION=\"$(version)\"
 
-ifeq "$(GETTEXT)" "ENABLE"
-	DEFS	+= -DUSE_GETTEXT
+ifeq "$(gettext)" "true"
+	DEFS	+= -DGETTEXT_PACKAGE=\"$(program)\" -DUSE_GETTEXT 
 endif
 
 CC		= gcc
@@ -94,13 +94,11 @@ $(obj_res): $(buildsrcdir)/%.o : $(buildatadir)/%.c
 
 # Meson & Ninja
 meson:
-	$(MAKE) dirs
-	$(MAKE) desktop xres prefix=$(prefix)
 	meson $(builddir) --prefix $(prefix) --strip
 	ninja -C $(builddir)
 
 lang:
-ifeq "$(GETTEXT)" "ENABLE"
+ifeq "$(gettext)" "true"
 	$(MAKE) -s -C po program=$(program) version=$(version) builddir=$(builddir)
 endif
 
@@ -114,16 +112,12 @@ install: strip
 	mkdir -p $(DESTDIR)$(bindir) $(DESTDIR)$(datadir) $(DESTDIR)$(desktopdir)
 	install -Dp -m0755 $(builddir)/$(program) $(DESTDIR)$(bindir)/$(program)
 	install -Dp -m0644 $(builddir)/$(program).desktop $(DESTDIR)$(desktopdir)/$(program).desktop
-ifeq "$(GETTEXT)" "ENABLE"
-	cp -r $(builddir)/locale $(DESTDIR)$(datadir)
-endif
+	if [ -d $(builddir)/locale ]; then cp -r $(builddir)/locale $(DESTDIR)$(datadir); fi
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/$(program)
 	rm -f $(DESTDIR)$(desktopdir)/$(program).desktop
-ifeq "$(GETTEXT)" "ENABLE"
 	rm -fr $(DESTDIR)$(datadir)/locale/*/*/$(program).mo
-endif
 
 help:
 	@echo

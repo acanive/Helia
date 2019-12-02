@@ -15,6 +15,7 @@
 #include "tree-view.h"
 #include "dtv-panel.h"
 #include "dtv-level.h"
+#include "scan.h"
 
 
 static void dtv_win_draw_black ( GtkDrawingArea *widget, cairo_t *cr, GdkPixbuf *logo )
@@ -46,12 +47,9 @@ static void dtv_win_draw_black ( GtkDrawingArea *widget, cairo_t *cr, GdkPixbuf 
 
 static gboolean dtv_win_draw_check ( GstElement *element, Base *base )
 {
-	if ( GST_ELEMENT_CAST ( element )->current_state == GST_STATE_NULL ) return TRUE;
+	if ( GST_ELEMENT_CAST ( element )->current_state == GST_STATE_PAUSED && base->dtv->checked_video ) return FALSE;
 
-    if ( GST_ELEMENT_CAST ( element )->current_state != GST_STATE_NULL )
-    {
-		if ( !base->dtv->checked_video ) return TRUE;
-	}
+	if ( GST_ELEMENT_CAST ( element )->current_state < GST_STATE_PLAYING || !base->dtv->checked_video ) return TRUE;
 
     return FALSE;
 }
@@ -60,7 +58,7 @@ static gboolean dtv_win_draw ( GtkDrawingArea *widget, cairo_t *cr, Base *base )
 {
 	if ( dtv_win_draw_check ( base->dtv->dvbplay, base ) ) dtv_win_draw_black ( widget, cr, base->pixbuf_tv );
 
-	return TRUE;
+	return FALSE;
 }
 
 static void dtv_win_realize ( GtkDrawingArea *drawingarea, Base *base )
@@ -69,7 +67,7 @@ static void dtv_win_realize ( GtkDrawingArea *drawingarea, Base *base )
 
     base->dtv->window_hid = xid;
 
-    g_print ( "GDK_WINDOW_XID: %ld \n", base->dtv->window_hid );
+    g_debug ( "GDK_WINDOW_XID: %ld ", base->dtv->window_hid );
 }
 
 static void dtv_win_drag_in ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDragContext *ct, G_GNUC_UNUSED int x, G_GNUC_UNUSED int y, 
@@ -86,6 +84,11 @@ static void dtv_win_drag_in ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDragContext
 		if ( g_str_has_suffix ( path, "gtv-channel.conf" ) )
 		{
 			treeview_add_dtv ( base, path );
+		}
+
+		if ( g_str_has_suffix ( path, "dvb_channel.conf" ) )
+		{
+			helia_convert_dvb5 ( base, path );
 		}
 
 		free ( path );
@@ -142,18 +145,57 @@ static gboolean dtv_win_press_event ( GtkDrawingArea *drawing, GdkEventButton *e
 	return TRUE;
 }
 
+static gboolean dtv_win_notify_event ( GtkDrawingArea *drawing, G_GNUC_UNUSED GdkEvent *event, Base *base )
+{
+	time ( &base->dtv->t_cur_ne_tv );
+
+	gdk_window_set_cursor ( gtk_widget_get_window ( GTK_WIDGET ( drawing ) ), 
+							gdk_cursor_new_for_display ( gdk_display_get_default (), GDK_ARROW ) );
+
+	return TRUE;
+}
+
+static gboolean dtv_set_cursor ( Base *base )
+{
+	if ( base->app_quit ) return FALSE;
+
+	if ( !gtk_window_is_active ( base->window ) ) return TRUE;
+
+	if ( !base->dtv->panel_quit || !base->dtv->checked_video ) return TRUE;
+
+	if ( GST_ELEMENT_CAST ( base->dtv->dvbplay )->current_state != GST_STATE_PLAYING ) return TRUE;
+
+	GdkWindow *window = gtk_widget_get_window ( GTK_WIDGET ( base->dtv->video ) );
+	GdkCursor *cursor = gdk_window_get_cursor ( window );
+
+	if ( cursor == NULL ) return TRUE;
+
+	time_t t_new_ne;
+	time ( &t_new_ne );
+
+	if ( ( t_new_ne - base->dtv->t_cur_ne_tv ) < 3 ) return TRUE;
+
+	if ( gdk_cursor_get_cursor_type ( cursor ) != GDK_BLANK_CURSOR )
+		gdk_window_set_cursor ( window, gdk_cursor_new_for_display ( gdk_display_get_default (), GDK_BLANK_CURSOR ) );
+
+	return TRUE;
+}
+
 GtkDrawingArea * dtv_win_create ( Base *base )
 {
 	GtkDrawingArea *video_win = (GtkDrawingArea *)gtk_drawing_area_new ();
 	g_signal_connect ( video_win, "realize", G_CALLBACK ( dtv_win_realize ), base );
 	g_signal_connect ( video_win, "draw",    G_CALLBACK ( dtv_win_draw    ), base );
 
-	gtk_widget_set_events ( GTK_WIDGET ( video_win ), GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK  );
-	g_signal_connect ( video_win, "button-press-event", G_CALLBACK ( dtv_win_press_event  ), base );
+	gtk_widget_set_events ( GTK_WIDGET ( video_win ), GDK_BUTTON_PRESS_MASK | GDK_SCROLL_MASK | GDK_POINTER_MOTION_MASK );
+	g_signal_connect ( video_win, "button-press-event",  G_CALLBACK ( dtv_win_press_event  ), base );
+	g_signal_connect ( video_win, "motion-notify-event", G_CALLBACK ( dtv_win_notify_event ), base );
 
 	gtk_drag_dest_set ( GTK_WIDGET ( video_win ), GTK_DEST_DEFAULT_ALL, NULL, 0, GDK_ACTION_COPY );
 	gtk_drag_dest_add_uri_targets  ( GTK_WIDGET ( video_win ) );
 	g_signal_connect  ( video_win, "drag-data-received", G_CALLBACK ( dtv_win_drag_in ), base );
+
+	g_timeout_add_seconds ( 1, (GSourceFunc)dtv_set_cursor, base );
 
 	return video_win;
 }

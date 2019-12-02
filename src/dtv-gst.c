@@ -16,6 +16,9 @@
 #include "mpegts.h"
 
 
+static void dtv_rec_set_location ( GstElement *element, char *rec_dir, char *ch_data, gboolean enc_ts );
+
+
 GstElement * dtv_gst_ret_iterate_element ( GstElement *it_element, const char *name1, const char *name2 )
 {
 	GstIterator *it = gst_bin_iterate_recurse ( GST_BIN ( it_element ) );
@@ -43,7 +46,7 @@ GstElement * dtv_gst_ret_iterate_element ( GstElement *it_element, const char *n
 						element_ret = element;
 				}
 
-				g_debug ( "%s: Object name: %s ", __func__, object_name );
+				g_debug ( "%s:: Object name: %s ", __func__, object_name );
 
 				g_free ( object_name );
 				g_value_reset (&item);
@@ -150,7 +153,7 @@ static void dtv_gst_change_audio_track ( GstElement *e_unlink, GstElement *e_lin
 						if ( gst_pad_unlink ( pad_src, pad_sink ) )
 							g_debug ( "%s: unlink Ok ", __func__ );
 						else
-							g_debug ( "%s: unlink Failed ", __func__ );
+							g_warning ( "%s: unlink Failed ", __func__ );
 					}
 					else
 						if ( i == num ) pad_link = pad_src;
@@ -181,7 +184,9 @@ static void dtv_gst_change_audio_track ( GstElement *e_unlink, GstElement *e_lin
 	if ( gst_pad_link ( pad_link, pad_sink ) == GST_PAD_LINK_OK )
 		g_debug ( "%s: link Ok ", __func__ );
 	else
-		g_debug ( "%s: link Failed ", __func__ );
+		g_warning ( "%s: link Failed ", __func__ );
+
+	gst_object_unref ( pad_sink );
 
 	g_value_unset ( &item );
 	gst_iterator_free ( it );
@@ -195,7 +200,7 @@ static gboolean dtv_gst_set_audio_track ( int set_track_audio, Base *base )
 
 	if ( element == NULL ) return FALSE;
 
-	GstElement *element_l = dtv_gst_ret_iterate_element ( base->dtv->dvbplay, "tee-audio", NULL );
+	GstElement *element_l = dtv_gst_ret_iterate_element ( base->dtv->dvbplay, ( base->rec_enc.rec_enc_prop ) ? "queue-audio" : "tee-audio", NULL );
 
 	if ( element_l == NULL ) return FALSE;
 
@@ -249,6 +254,7 @@ static GstElementFactory * dtv_gst_find_factory ( GstCaps *caps, int e_num )
 
 	const char *metadata = gst_element_factory_get_metadata ( factory, GST_ELEMENT_METADATA_KLASS ); // "long-name"
 	g_debug ( "%s:: metadata: %s | g_list_length: %d ",__func__, metadata, g_list_length ( list_filter ) );
+	g_debug ( "%s:: feature_get_name %s ",__func__, gst_plugin_feature_get_name ( factory ) );
 
 	gst_plugin_feature_list_free ( list_filter );
 	gst_plugin_feature_list_free ( list );
@@ -262,20 +268,15 @@ static gboolean dtv_gst_pad_check_type ( GstPad *pad, const char *type )
 
 	GstCaps *caps = gst_pad_get_current_caps ( pad );
 
-	char *str = gst_caps_to_string ( caps );
+	const char *name = gst_structure_get_name ( gst_caps_get_structure ( caps, 0 ) );
 
-	if ( g_str_has_prefix ( str, type ) ) ret = TRUE;
+	g_debug ( "%s:: caps type: %s ( find type %s ) ",__func__, name, type );
 
-	if ( ret )
-	{
-		GstElementFactory *factory = dtv_gst_find_factory ( caps, GST_ELEMENT_FACTORY_TYPE_PARSER );
+	if ( g_str_has_prefix ( name, type ) ) ret = TRUE;
 
-		const char *plugin_name = gst_plugin_feature_get_name ( GST_PLUGIN_FEATURE (factory) );
+	// if ( ret ) dtv_gst_find_factory ( caps, GST_ELEMENT_FACTORY_TYPE_PARSER );
 
-		g_debug ( "%s: caps %s | plugin_name %s ",__func__, str, plugin_name );
-	}
-
-	g_free ( str );
+	gst_caps_unref (caps);
 
 	return ret;
 }
@@ -331,19 +332,17 @@ static void dtv_gst_typefind_parser ( GstElement *typefind, uint probability, Gs
 
 static void dtv_gst_pad_demux_audio ( GstElement *element, GstPad *pad, GstElement *element_audio )
 {
-	if ( dtv_gst_pad_check_type ( pad, "audio" ) ) dtv_gst_pad_link ( pad, element_audio, "audio", element );
+	if ( dtv_gst_pad_check_type ( pad, "audio" ) ) dtv_gst_pad_link ( pad, element_audio, "demux audio", element );
 }
 
 static void dtv_gst_pad_demux_video ( GstElement *element, GstPad *pad, GstElement *element_video )
 {
-	if ( dtv_gst_pad_check_type ( pad, "video" ) ) dtv_gst_pad_link ( pad, element_video, "video", element );
+	if ( dtv_gst_pad_check_type ( pad, "video" ) ) dtv_gst_pad_link ( pad, element_video, "demux video", element );
 }
 
 static void dtv_gst_pad_decode ( GstElement *element, GstPad *pad, GstElement *element_va )
 {
-	const char *name = gst_structure_get_name ( gst_caps_get_structure ( gst_pad_query_caps ( pad, NULL ), 0 ) );
-
-	dtv_gst_pad_link ( pad, element_va, name, element );
+	dtv_gst_pad_link ( pad, element_va, "decode  audio / video", element );
 }
 
 static void dtv_gst_create_dvb_bin ( GstElement *element, gboolean video_enable, Base *base )
@@ -351,9 +350,9 @@ static void dtv_gst_create_dvb_bin ( GstElement *element, gboolean video_enable,
 	struct dvb_all_list { const char *name; const char *u_name; } dvb_all_list_n[] =
 	{
 		{ "dvbsrc", NULL }, { "tsdemux", NULL },
-			{ "tee", "tee-audio" }, { "queue2", NULL }, { "decodebin", "dec-audio" }, 
+			{ "tee", "tee-audio" }, { "queue2", NULL }, { "decodebin", NULL },
 				{ "audioconvert", NULL }, { "equalizer-nbands", NULL }, { "autoaudiosink", NULL },
-			{ "tee", "tee-video" }, { "queue2", NULL }, { "decodebin", "dec-video" }, 
+			{ "tee", "tee-video" }, { "queue2", NULL }, { "decodebin", NULL },
 				{ "videoconvert", NULL }, { "videobalance",     NULL }, { "autovideosink", NULL }
 	};
 
@@ -383,6 +382,7 @@ static void dtv_gst_create_dvb_bin ( GstElement *element, gboolean video_enable,
 	if ( video_enable ) g_signal_connect ( elements[10], "pad-added", G_CALLBACK ( dtv_gst_pad_decode ), elements[11] );
 
 	// record
+	if ( !base->dtv->enable_rec || base->rec_enc.rec_enc_prop ) return;
 
 	struct dvb_all_rec { const char *name; const char *u_name; } dvb_all_rec_n[] =
 	{
@@ -425,6 +425,119 @@ static void dtv_gst_create_dvb_bin ( GstElement *element, gboolean video_enable,
 	if ( video_enable ) g_signal_connect ( elements_rec[3], "have-type", G_CALLBACK ( dtv_gst_typefind_parser ), base );
 }
 
+static void dtv_gst_float_prop ( const char *prop, const char *val, GstElement *element )
+{
+	GString *string = g_string_new ( val );
+
+	string = g_string_erase ( string, 0, 2 );
+	string = g_string_prepend ( string, "0," );
+
+	g_object_set ( element, prop, atof ( string->str ), NULL );
+
+	g_string_free ( string, TRUE );
+}
+
+static void dtv_gst_create_dvb_enc_set_prop ( const char *prop, GstElement *element )
+{
+	if ( prop && strlen ( prop ) > 0 )
+	{
+		if ( g_strrstr ( prop, "=" ) )
+		{
+			char **fields = g_strsplit ( prop, " ", 0 );
+			uint j = 0, numfields = g_strv_length ( fields );
+
+			for ( j = 0; j < numfields; j++ )
+			{
+				char **splits = g_strsplit ( fields[j], "=", 0 );
+				uint  numsplits = g_strv_length ( splits );
+
+				if ( numsplits == 3 )
+				{
+					if ( g_str_has_prefix ( splits[0], "int"   ) ) g_object_set ( element, splits[1], atoi ( splits[2] ), NULL );
+
+					if ( g_str_has_prefix ( splits[0], "uint"  ) ) g_object_set ( element, splits[1], atol ( splits[2] ), NULL );
+
+					if ( g_str_has_prefix ( splits[0], "float" ) )
+					{
+						if ( g_str_has_prefix ( splits[2], "0." ) )
+							dtv_gst_float_prop ( splits[1], splits[2], element );
+						else
+							g_object_set ( element, splits[1], atof ( splits[2] ), NULL );
+					}
+
+					if ( g_str_has_prefix ( splits[0], "bool"  ) ) g_object_set ( element, splits[1], ( g_strrstr ( splits[2], "true" ) ) ? TRUE : FALSE, NULL );
+
+					if ( g_str_has_prefix ( splits[0], "char"  ) ) g_object_set ( element, splits[1], splits[2], NULL );
+
+					g_debug ( "%s:: type %s | key = %s | val %s ", __func__, splits[0], splits[1], splits[2] );
+				}
+				else
+					g_warning ( "%s:: not set prop ( length string array < 3 ) - %s \n", __func__, fields[j] );
+
+				g_strfreev ( splits );
+			}
+
+			g_strfreev ( fields );
+		}
+	}
+}
+
+static void dtv_gst_create_dvb_enc ( GstElement *element, gboolean video_enable, Base *base )
+{
+	struct dvb_all_list { const char *name; const char *u_name; } dvb_all_list_n[] =
+	{
+		{ "dvbsrc", NULL }, { "tsdemux",   NULL },
+			{ "queue2", "queue-audio" }, { "decodebin", NULL }, { "tee", NULL },
+				{ "queue2", NULL }, { "audioconvert", NULL }, { "equalizer-nbands", NULL }, { "autoaudiosink", NULL },
+			{ "queue2", "queue-video" }, { "decodebin", NULL }, { "tee", NULL },
+				{ "queue2", NULL }, { "videoconvert", NULL }, { "videobalance",     NULL }, { "autovideosink", NULL },
+		{ "queue2", NULL }, { base->rec_enc.str_audio_enc, NULL },
+		{ "queue2", NULL }, { base->rec_enc.str_video_enc, NULL },
+			{ base->rec_enc.str_muxer_enc, NULL }, { "filesink", NULL }
+	};
+
+	GstElement *elements[ G_N_ELEMENTS ( dvb_all_list_n ) ];
+
+	uint c = 0;
+	for ( c = 0; c < G_N_ELEMENTS ( dvb_all_list_n ); c++ )
+	{
+		if ( !video_enable && ( c > 8 && c < 16 ) ) continue;
+		if ( !video_enable && ( c == 18 || c == 19 ) ) continue;
+
+		elements[c] = gst_element_factory_make ( dvb_all_list_n[c].name, dvb_all_list_n[c].u_name );
+
+		if ( !elements[c] )
+			g_critical ( "%s:: element (factory make) - %s not created. \n", __func__, dvb_all_list_n[c].name );
+
+		gst_bin_add ( GST_BIN ( element ), elements[c] );
+
+		if (  c == 0 || c == 2 || c == 4 || c == 9 || c == 11 || c == 16 || c == 18 || c == 20 ) continue;
+
+		gst_element_link ( elements[c-1], elements[c] );
+	}
+
+	g_signal_connect ( elements[1], "pad-added", G_CALLBACK ( dtv_gst_pad_demux_audio ), elements[2] );
+	if ( video_enable ) g_signal_connect ( elements[1], "pad-added", G_CALLBACK ( dtv_gst_pad_demux_video ), elements[9] );
+
+	g_signal_connect ( elements[3], "pad-added", G_CALLBACK ( dtv_gst_pad_decode ), elements[4] );
+	if ( video_enable ) g_signal_connect ( elements[10], "pad-added", G_CALLBACK ( dtv_gst_pad_decode ), elements[11] );
+
+	dtv_rec_set_location ( elements[21], base->rec_dir, base->dtv->ch_data, base->rec_enc.rec_enc_prop );
+
+	gst_element_link ( elements[4],  elements[16] );
+	gst_element_link ( elements[17], elements[20] );
+
+	dtv_gst_create_dvb_enc_set_prop ( base->rec_enc.str_audio_prop, elements[17] );
+
+	if ( video_enable )
+	{
+		gst_element_link ( elements[11], elements[18] );
+		gst_element_link ( elements[19], elements[20] );
+
+		dtv_gst_create_dvb_enc_set_prop ( base->rec_enc.str_video_prop, elements[19] );
+	}
+}
+
 static void dtv_gst_remove_dvb_bin ( GstElement *pipeline )
 {
 	GstIterator *it = gst_bin_iterate_elements ( GST_BIN ( pipeline ) );
@@ -441,7 +554,7 @@ static void dtv_gst_remove_dvb_bin ( GstElement *pipeline )
 
 				char *object_name = gst_object_get_name ( GST_OBJECT ( element ) );
 
-				g_debug ( "%s: Object remove: %s", __func__, object_name );
+				g_debug ( "%s:: Object remove: %s", __func__, object_name );
 
 				gst_bin_remove ( GST_BIN ( pipeline ), element );
 
@@ -492,11 +605,11 @@ static char * dtv_str_split ( const char *data, const char *delm, uint num )
 	return ret_ch;
 }
 
-static void dtv_rec_set_location ( GstElement *element, char *rec_dir, char *ch_data )
+static void dtv_rec_set_location ( GstElement *element, char *rec_dir, char *ch_data, gboolean enc_ts )
 {
 	char *date_str = dtv_time_to_str ();
 	char *name     = dtv_str_split ( ch_data, ":", 0 );
-	char *file_rec = g_strdup_printf ( "%s/%s_%s.%s", rec_dir, name, date_str, "m2ts" );
+	char *file_rec = g_strdup_printf ( "%s/%s_%s%s", rec_dir, name, date_str, ( enc_ts ) ? "" : ".m2ts" );
 
 	g_object_set ( element, "location", file_rec, NULL );
 
@@ -520,7 +633,7 @@ static GstPadProbeReturn dtv_gst_blockpad_probe ( GstPad * pad, GstPadProbeInfo 
 
 	if ( g_str_has_prefix ( file_name, "/dev/null" ) )
 	{
-		dtv_rec_set_location ( element, base->rec_dir, base->dtv->ch_data );
+		dtv_rec_set_location ( element, base->rec_dir, base->dtv->ch_data, base->rec_enc.rec_enc_prop );
 
 		base->dtv->rec_ses = TRUE;
 	}
@@ -653,7 +766,7 @@ static void dtv_gst_data_set ( GstElement *pipeline, const char *data, Base *bas
 		}
 		else if ( g_strrstr ( splits[0], "lnb-type" ) )
 		{
-			set_lnb_low_high_switch ( element, dat );
+			set_lnb_low_high_switch ( element, dat, TRUE, base );
 		}
 		else
 		{
@@ -772,7 +885,10 @@ static void dtv_play ( Base *base, const char *data )
 	{
 		base->dtv->checked_video = dtv_gst_checked_video ( data );
 
-		dtv_gst_create_dvb_bin ( base->dtv->dvbplay, base->dtv->checked_video, base );
+		if ( base->rec_enc.rec_enc_prop && base->dtv->rec_ses )
+			dtv_gst_create_dvb_enc ( base->dtv->dvbplay, base->dtv->checked_video, base );
+		else
+			dtv_gst_create_dvb_bin ( base->dtv->dvbplay, base->dtv->checked_video, base );
 
 		dtv_gst_data_set ( base->dtv->dvbplay, data, base );
 
@@ -844,6 +960,26 @@ void dtv_gst_record ( Base *base )
 {
 	if ( GST_ELEMENT_CAST ( base->dtv->dvbplay )->current_state != GST_STATE_PLAYING ) return;
 
+	if ( !base->dtv->enable_rec )
+	{
+		base_message_dialog ( "", "Off", GTK_MESSAGE_INFO, base->window );
+
+		return;
+	}
+
+	if ( base->rec_enc.rec_enc_prop )
+	{
+		gboolean rec = base->dtv->rec_ses;
+
+		dtv_stop ( base );
+
+		base->dtv->rec_ses = !rec;
+
+		dtv_play ( base, base->dtv->ch_data );
+
+		return;
+	}
+
 	GstElement *mpegtsmux = dtv_gst_ret_iterate_element ( base->dtv->dvbplay, "mpegtsmux", NULL );
 
 	if ( mpegtsmux == NULL ) return;
@@ -879,7 +1015,7 @@ static void dtv_gst_msg_err ( G_GNUC_UNUSED GstBus *bus, GstMessage *msg, Base *
 
     gst_message_parse_error ( msg, &err, &dbg );
 
-    g_printerr ( "%s: %s (%s)\n", __func__, err->message, (dbg) ? dbg : "no details" );
+    g_critical ( "%s: %s (%s)", __func__, err->message, (dbg) ? dbg : "no details" );
 
     base_message_dialog ( "", err->message, GTK_MESSAGE_ERROR, base->window );
 
@@ -927,7 +1063,7 @@ GstElement * dtv_gst_create ( Base *base )
 
     if ( !dvbplay )
     {
-        g_printerr ( "%s: dvbplay - not created.\n", __func__ );
+        g_critical ( "%s: dvbplay - not created.", __func__ );
 
         return NULL;
     }

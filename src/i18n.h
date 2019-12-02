@@ -102,6 +102,9 @@ MsgIdStr ru_RU_msgidstr_n[] =
     { "Scanner", 			"Сканер"     		},
     { "Undefined", 			"Не определено"     },
     { "Video equalizer", 	"Видео эквалайзер"  },
+    { "Not available during recording.", "Недоступно во время записи." },
+    { "Live recording stopped.", "Запись в прямом эфире остановлена." },
+    { "Live playback stopped.", "Воспроизведение прямого эфира остановлено." }
 };
 
 MsgIdStr uk_UA_msgidstr_n[] =
@@ -118,7 +121,10 @@ MsgIdStr uk_UA_msgidstr_n[] =
     { "Saturation", 		"Насиченість"     	},
     { "Scanner", 			"Сканер"     		},
     { "Undefined", 			"Не визначено"     	},
-    { "Video equalizer", 	"Відео еквалайзер"  }
+    { "Video equalizer", 	"Відео еквалайзер"  },
+    { "Not available during recording.", "Недоступно під час запису." },
+    { "Live recording stopped.", "Запис в прямому ефірі зупинено." },
+    { "Live playback stopped.", "Відтворення прямого ефіру зупинено." }
 };
 
 

@@ -31,5 +31,7 @@ void dialog_open_dir ( Base *base );
 void dialog_open_files ( Base *base );
 void add_arg ( GFile **files, int n_files, Base *base );
 
+void win_open_net ( Base *base );
+
 
 #endif // PREF_H

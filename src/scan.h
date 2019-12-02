@@ -14,7 +14,7 @@
 void scan_gst_create ( Base *base );
 void scan_win_create ( Base *base );
 
-void set_lnb_low_high_switch ( GstElement *element, int type_lnb );
+void set_lnb_low_high_switch ( GstElement *element, int type_lnb, gboolean set_scan, Base *base );
 
 uint helia_get_dvb_delsys ( uint adapter, uint frontend );
 void helia_set_dvb_delsys ( uint adapter, uint frontend, uint delsys );
@@ -27,6 +27,8 @@ const char * scan_get_info ( const char *data );
 const char * scan_get_info_descr_vis ( const char *data, int num );
 
 void scan_read_ch_to_treeview ( Base *base );
+void helia_convert_dvb5 ( Base *base, const char *file );
+void initial_scan_genfile ( const char *conf_dir, const char *file_name );
 
 
 #endif // SCAN_H

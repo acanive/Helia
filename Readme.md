@@ -1,4 +1,4 @@
-## [Helia](https://github.com/vl-nix/Helia)
+## [Helia](https://www.opencode.net/vl-nix/helia)
 
 * Digital TV
   * DVB-T2/S2/C, ATSC, DTMB, ISDB
@@ -24,40 +24,35 @@
 * all gst-plugins 1.0 ( & dev )
 * gst-libav
 * gstreamer-tools ( or gstreamer-utils )
+* Initial scan
+  * [dvbv5-scan](https://linuxtv.org/downloads/v4l-utils/)
+  * [dtv-scan-tables](https://git.linuxtv.org/dtv-scan-tables.git/)
+  * [dialog](http://invisible-island.net/dialog/dialog.html)
 
 
 #### Build ( variants )
 
+#### Gettext
+
+* By default, Gettext is not used. Translation into other languages is included in the program.
+
 ##### 1. Meson & Ninja
 
-* make clean
-* make meson prefix=/usr
-* ninja -C build install ( or sudo ninja -C build install )
+* meson build --prefix /usr --strip
+  * Using the Gettext: meson build --prefix /usr --strip -D enable-gettext=true
+* ninja -C build
+* sudo ninja -C build install
 
 ##### 2. Makefile
 
 * make help
-* make clean
 * make
-* make install ( or sudo make install )
+  * Using the Gettext: make gettext=true
+* sudo make install
 
 ##### 3. Autogen
 
-* sh autogen.sh
-* sh configure ( or sh configure --prefix=PREFIX  )
-* make
-* make install ( or sudo make install )
-
-##### Gettext
-
-* Note:
-  * By default, Gettext is not used. Translation into other languages is included in the program.
-* If you want to use Gettext:
-  * git clone https://github.com/vl-nix/Helia.git
-  * cd Helia
-  * Build: make GETTEXT=ENABLE
-  * Install: sudo make GETTEXT=ENABLE install
-  * Uninstall: sudo make GETTEXT=ENABLE uninstall
+* sh autogen.sh && sh configure --prefix=/usr && make
 
 
 #### [Preview](https://www.pling.com/p/1312498/)

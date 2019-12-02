@@ -119,6 +119,7 @@ const DvbTypes isdbs_props_n[] =
 {
 	{ "Frequency  MHz", FALSE,  0, 30000000 }, // kHz ( 0 - 30 GHz )
 	{ "Stream ID",      FALSE, -1, 65535 },
+	// { "Polarity",       TRUE,   0, 0 },
 	{ "DiSEqC",         TRUE,   0, 0 },
 	{ "LNB",            TRUE,   0, 0 }
 };
@@ -276,14 +277,10 @@ enum lnbs
 	LNB_EHD,
 	LNB_CBD,
 	LNB_CMT,
-	LNB_DSP,
-	LNB_BS1,
+	LNB_BJ1,
 	LNB_QPH,
-	LNB_L70,
-	LNB_L75,
-	LNB_L11,
-	LNB_BRS,
-	LNB_BRO
+	LNB_BRO,
+	LNB_MNL
 };
 
 const DvbDescrAll dvb_descr_lnb_type_n[] =
@@ -295,14 +292,10 @@ const DvbDescrAll dvb_descr_lnb_type_n[] =
 	{ LNB_EHD, "ENHANCED",  "Enhanced"  },
 	{ LNB_CBD, "C-BAND",    "C-Band"    },
 	{ LNB_CMT, "C-MULT",    "C-Mult"    },
-	{ LNB_DSP, "DISHPRO",   "Dishpro"   },
-	{ LNB_BS1, "110BS",	    "110 BS"    },
+	{ LNB_BJ1, "110BS",	    "110 BS"    },
 	{ LNB_QPH, "QPH031",    "QPH031"    },
-	{ LNB_L70, "L10700",	"L10700"    },
-	{ LNB_L75, "L10750",	"L10750"    },
-	{ LNB_L11, "L11300",	"L11300"    },
-	{ LNB_BRS, "STACKED-BRASILSAT", "BrasilSat St" },
-	{ LNB_BRO, "OI-BRASILSAT",		"BrasilSat Oi" }
+	{ LNB_BRO, "OI-BRASILSAT", "BrasilSat Oi" },
+	{ LNB_MNL, "MANUAL", "🤚" }
 };
 
 typedef struct _LnbTypes LnbTypes;
@@ -312,28 +305,26 @@ struct _LnbTypes
 	int descr_num;
 	const char *name;
 
-	long low_val;
-	long high_val;
-	long switch_val;
+	uint lo1_val;
+	uint lo2_val;
+	uint switch_val;
+	uint min_val;
+	uint max_val;
 };
 
 const LnbTypes lnb_type_lhs_n[] =
 {
-	{ LNB_UNV, "UNIVERSAL", 9750000,  10600000, 11700000 },
-	{ LNB_DBS, "DBS",		11250000, 0, 0               },
-	{ LNB_EXT, "EXTENDED",  9750000,  10600000, 11700000 },
-	{ LNB_STD, "STANDARD",	10000000, 0, 0               },
-	{ LNB_EHD, "ENHANCED",	9750000,  0, 0               },
-	{ LNB_CBD, "C-BAND",	5150000,  0, 0               },
-	{ LNB_CMT, "C-MULT",	5150000,  5750000,  0        },
-	{ LNB_DSP, "DISHPRO",	11250000, 14350000, 0        },
-	{ LNB_BS1, "110BS",		10678000, 0, 0               },
-	{ LNB_QPH, "QPH031",    10750000, 11250000, 12200000 },
-	{ LNB_L70, "L10700",	10700000, 0, 0               },
-	{ LNB_L75, "L10750",	10750000, 0, 0               },
-	{ LNB_L11, "L11300",	11300000, 0, 0               },
-	{ LNB_BRS, "STACKED-BRASILSAT", 9710000,  9750000,  0        },
-	{ LNB_BRO, "OI-BRASILSAT",		10000000, 10445000, 11700000 }
+	{ LNB_UNV, "UNIVERSAL", 	9750000,  10600000, 11700000, 10700000, 12700000 },
+	{ LNB_DBS, "DBS",			11250000, 0, 0, 			  12200000, 12700000 },
+	{ LNB_EXT, "EXTENDED",  	9750000,  10600000, 11700000, 10700000, 12750000 },
+	{ LNB_STD, "STANDARD",		10000000, 0, 0, 			  10945000, 11450000 },
+	{ LNB_EHD, "ENHANCED",		9750000,  0, 0, 			  10700000, 11700000 },
+	{ LNB_CBD, "C-BAND",		5150000,  0, 0, 			   3700000,  4200000 },
+	{ LNB_CMT, "C-MULT",		5150000,  5750000,  0,		   3700000,  4200000 },
+	{ LNB_BJ1, "110BS",			10678000, 0, 0, 			  11710000, 12751000 },
+	{ LNB_QPH, "QPH031",    	10750000, 11250000, 12200000, 11700000, 12700000 },
+	{ LNB_BRO, "OI-BRASILSAT", 	10000000, 10445000, 11800000, 10950000, 12200000 },
+	{ LNB_MNL, "MANUAL", 		9750,     0, 0, 0, 25000 } // MHz
 };
 
 const DvbDescrAll dvb_descr_lnb_num_n[] =

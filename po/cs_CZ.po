@@ -1,13 +1,13 @@
 # Czech translations for helia package.
 # Copyright (C) 2018 THE helia'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the helia package.
-#
 # Pavel Fric <pavelfric@seznam.cz>, 2018.
+#
 msgid ""
 msgstr ""
-"Project-Id-Version: helia 8.2\n"
+"Project-Id-Version: helia 9.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-08-09 20:53+0300\n"
+"POT-Creation-Date: 2019-09-01 19:26+0300\n"
 "PO-Revision-Date: 2018-10-13 08:01+0100\n"
 "Last-Translator: Pavel Fric <pavelfric@seznam.cz>\n"
 "Language-Team: Czech <kde-i18n-doc@kde.org>\n"
@@ -53,6 +53,18 @@ msgstr "Odstín"
 #: ../src/lang.c:26
 msgid "Level dB"
 msgstr "Úroveň  dB"
+
+#: ../src/lang.c:33
+msgid "Live playback stopped."
+msgstr ""
+
+#: ../src/lang.c:32
+msgid "Live recording stopped."
+msgstr ""
+
+#: ../src/lang.c:31
+msgid "Not available during recording."
+msgstr ""
 
 #: ../src/lang.c:27
 msgid "Saturation"

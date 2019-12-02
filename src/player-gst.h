@@ -32,7 +32,7 @@ void player_volume_changed ( G_GNUC_UNUSED GtkScaleButton *button, gdouble value
 GstElement * player_gst_ret_iterate_element ( GstElement *it_element, const char *name1, const char *name2 );
 
 void player_set_vis ( Base *base );
-void player_set_subtitle ( Base *base );
+void player_set_subtitle ( Base *base, gboolean state_subtitle );
 
 
 #endif /* PLAYER_GST_H */
