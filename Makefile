@@ -1,3 +1,11 @@
+# Helia
+#
+# Clone
+# git clone git@github.com:vl-nix/helia.git
+#
+# Showing debug:
+#  G_MESSAGES_DEBUG=all build/helia
+
 program		= helia
 version		= 10.0
 
@@ -55,7 +63,7 @@ $(gres): $(buildsrcdir)/%.c : $(builddir)/%.xml
 
 $(binary): $(obj_res) $(objects) 
 	@echo
-	@echo '  CCLD	' $@
+	@echo '  CCLD	' $@  '( Ver. $(version) )'
 	@$(CC) $^ -o $@ $(LDLIBS)
 	@echo
 
