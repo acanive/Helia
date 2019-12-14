@@ -1,6 +1,6 @@
 project(
   'helia', 'c',
-  version: '10.0'
+  version: '11.0'
 )
 
 helia_prefix = get_option('prefix')

@@ -285,20 +285,19 @@ void helia_treeview_add_file ( Helia *helia, const char *path, gboolean play )
 	free ( name_down );
 }
 
-void helia_treeview_add_arg ( GFile **files, int n_files, Helia *helia )
+static void helia_treeview_add_arg ( GFile **files, int n_files, Helia *helia )
 {
-	int i = 0;
-
-	for ( i = 0; i < n_files; i++ )
+	int i = 0; for ( i = 0; i < n_files; i++ )
 	{
 		char *path = g_file_get_path ( files[i] );
 
-		if ( g_file_test ( path, G_FILE_TEST_IS_REGULAR ) )
-		{
-			helia_treeview_add_file ( helia, path, ( i == 0 ) ? TRUE : FALSE );
-		}
+		if ( path && g_file_test ( path, G_FILE_TEST_IS_DIR ) )
+			helia_treeview_add_dir ( helia, path );
 
-		g_free ( path );
+		if ( path && g_file_test ( path, G_FILE_TEST_IS_REGULAR ) )
+			helia_treeview_add_file ( helia, path, ( i == 0 ) ? TRUE : FALSE );
+
+		free ( path );
 	}
 }
 
@@ -338,15 +337,13 @@ void helia_treeview_add_dir ( Helia *helia, const char *dir_path )
 			char *path_name = g_strconcat ( dir_path, "/", name, NULL );
 
 			if ( g_file_test ( path_name, G_FILE_TEST_IS_DIR ) )
-			{
 				helia_treeview_add_dir ( helia, path_name ); // Recursion!
-			}
 
 			if ( g_file_test ( path_name, G_FILE_TEST_IS_REGULAR ) )
-			{
 				if ( helia_treeview_media_filter ( path_name ) )
-					list = g_list_append ( list, path_name );
-			}
+					list = g_list_append ( list, g_strdup ( path_name ) );
+
+			g_free ( path_name );
 		}
 
 		g_dir_close ( dir );
@@ -391,6 +388,67 @@ void helia_treeview_add_channels ( Helia *helia, const char *file )
 
 		g_error_free ( err );
 	}
+}
+
+static void helia_treeview_start_channel ( const char *channel, Helia *helia )
+{
+	GtkTreeModel *model = gtk_tree_view_get_model ( GTK_TREE_VIEW ( helia->treeview_tv ) );
+	int indx = gtk_tree_model_iter_n_children ( model, NULL );
+
+	if ( indx == 0 ) return;
+
+	GtkTreeIter iter;
+	gboolean valid, break_f = FALSE;
+
+	for ( valid = gtk_tree_model_get_iter_first ( model, &iter ); valid;
+		valid = gtk_tree_model_iter_next ( model, &iter ) )
+	{
+		char *data;
+		gtk_tree_model_get ( model, &iter, COL_DATA,  &data, -1 );
+
+		if ( g_str_has_prefix ( data, channel ) )
+		{
+			helia_dtv_stop_set_play ( helia, data );
+
+			break_f = TRUE;
+		}
+
+		g_free ( data );
+		if ( break_f ) break;
+	}
+}
+
+void helia_treeview_add_start ( GFile **files, int n_files, Helia *helia )
+{
+	if ( g_file_test ( helia->ch_conf, G_FILE_TEST_EXISTS ) )
+		helia_treeview_add_channels ( helia, helia->ch_conf );
+
+	if ( n_files == 0 ) return;
+
+	char *ch_prop = g_file_get_basename ( files[0] );
+
+	if ( ch_prop && g_str_has_prefix ( ch_prop, "channel" ) )
+	{
+		helia_window_set_win_tv ( NULL, helia );
+
+		if ( n_files == 2 )
+		{
+			char *channel = g_file_get_basename ( files[1] );
+
+			if ( channel ) helia_treeview_start_channel ( channel, helia );
+
+			g_debug ( "%s:: %s = %s ", __func__, ch_prop, channel );
+
+			g_free ( channel );
+		}
+	}
+	else
+	{
+		helia_window_set_win_mp ( NULL, helia );
+		helia_treeview_add_arg ( files, n_files, helia );
+	}
+
+	g_free ( ch_prop );
 }
 
 static void helia_treeview_row_activated_mp ( GtkTreeView *tree_view, GtkTreePath *path, G_GNUC_UNUSED GtkTreeViewColumn *column, Helia *helia )
@@ -445,9 +503,7 @@ static void helia_treeview_add_columns ( GtkTreeView *tree_view, const char *tit
 		{ "Data", FALSE }
 	};
 
-	uint c = 0;
-
-	for ( c = 0; c < NUM_COLS; c++ )
+	uint c = 0; for ( c = 0; c < NUM_COLS; c++ )
 	{
 		helia_treeview_create_columns ( tree_view, col_title_list_n[c].title, c, col_title_list_n[c].vis );
 	}
@@ -527,8 +583,10 @@ HeliaTreeview * helia_treeview_new ( Helia *helia, gboolean mp_tv )
 
 	helia_treeview_add_columns ( treeview, ( mp_tv ) ? _i18n_ ( "Files" ) : _i18n_ ( "Channels" ) );
 
-	( mp_tv ) ? g_signal_connect ( treeview, "row-activated", G_CALLBACK ( helia_treeview_row_activated_mp ), helia )
-		  : g_signal_connect ( treeview, "row-activated", G_CALLBACK ( helia_treeview_row_activated_tv ), helia );
+	if ( mp_tv )
+		g_signal_connect ( treeview, "row-activated", G_CALLBACK ( helia_treeview_row_activated_mp ), helia );
+	else
+		g_signal_connect ( treeview, "row-activated", G_CALLBACK ( helia_treeview_row_activated_tv ), helia );
 
     return treeview;
 }

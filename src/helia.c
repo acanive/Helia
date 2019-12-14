@@ -134,29 +134,18 @@ static void helia_new_window ( GApplication *app, GFile **files, int n_files )
 	helia->treeview_tv = helia_treeview_new ( helia, FALSE );
 
 	helia->level   = helia_level_new ();
-
 	helia->slider  = helia_slider_new ();
-	helia->slider->slider_signal_id = g_signal_connect ( helia->slider->slider, "value-changed", G_CALLBACK ( helia_player_slider_seek_changed ), helia );
-	g_timeout_add ( 100, (GSourceFunc)helia_player_slider_refresh, helia );
 
 	helia->list_mp = helia_list_new ( helia, TRUE  );
 	helia->list_tv = helia_list_new ( helia, FALSE );
 
 	helia->window = helia_window_new ( helia );
 
-	helia->label_audio = NULL;
-	helia->label_video = NULL;
-	helia->volbutton_mp = NULL;
-	helia->volbutton_tv = NULL;
-	helia->level_panel  = NULL;
-	helia->slider_panel = NULL;
-
-	if ( n_files > 0 ) { helia_window_set_win_mp ( NULL, helia ); helia_treeview_add_arg ( files, n_files, helia ); }
-
-	if ( g_file_test ( helia->ch_conf, G_FILE_TEST_EXISTS ) )
-		helia_treeview_add_channels ( helia, helia->ch_conf );
-
 	helia->connect = helia_dbus_init ();
+
+	helia_treeview_add_start ( files, n_files, helia );
+
+	g_timeout_add ( 100, (GSourceFunc)helia_player_slider_refresh, helia );
 }
 
 static void helia_activate ( GApplication *app )
@@ -200,6 +189,13 @@ static void helia_init ( Helia *helia )
 	helia->panel_ext = FALSE;
 	helia->scrambling = FALSE;
 
+	helia->label_audio  = NULL;
+	helia->label_video  = NULL;
+	helia->volbutton_mp = NULL;
+	helia->volbutton_tv = NULL;
+	helia->level_panel  = NULL;
+	helia->slider_panel = NULL;
+
 	helia->str_audio_enc  = g_strdup ( "vorbisenc" );
 	helia->str_video_enc  = g_strdup ( "theoraenc" );
 	helia->str_muxer_enc  = g_strdup ( "oggmux"    );
@@ -242,8 +238,25 @@ Helia * helia_new (void)
 	return g_object_new ( helia_get_type (), "flags", G_APPLICATION_HANDLES_OPEN, NULL );
 }
 
+static void helia_help ( const char *arg_1 )
+{
+	const char *help = 
+"Examples: \n\
+  File ( path ):  helia \"/path/to/playlist.m3u\" \n\
+  File ( uri  ):  helia \"file:///path/to/playlist.m3u\" \n\
+  Net  ( uri  ):  helia \"http://radio.hbr1.com:19800/ambient.ogg\" \n\
+  Channel:        helia channel \"BBC World\"\n\n\
+Showing debug: \n\
+  G_MESSAGES_DEBUG=all helia";
+
+	if ( g_str_has_prefix ( arg_1, "--help" ) || g_str_has_prefix ( arg_1, "-h" ) )
+		g_print ( "\n%s \n\n", help );
+}
+
 int main ( int argc, char *argv[] )
 {
+	if ( argc > 1 ) helia_help ( argv[1] );
+
 	gst_init ( NULL, NULL );
 
 	bindtextdomain ( "helia", "/usr/share/locale" );

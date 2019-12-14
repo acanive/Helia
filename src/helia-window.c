@@ -28,7 +28,7 @@ static void helia_about_win ( GtkWindow *window )
 	const char *license     = "This program is free software. \n\nGNU Lesser General Public License \nwww.gnu.org/licenses/lgpl.html";
 
 	gtk_about_dialog_set_program_name ( dialog, "Helia" );
-	gtk_about_dialog_set_version ( dialog, "10.0" );
+	gtk_about_dialog_set_version ( dialog, "11.0" );
 	gtk_about_dialog_set_license ( dialog, license );
 	gtk_about_dialog_set_authors ( dialog, authors );
 	gtk_about_dialog_set_artists ( dialog, artists );
@@ -94,7 +94,7 @@ void helia_window_set_win_mp ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 	gtk_window_set_title ( window, "Helia - Media Player");
 }
 
-static void helia_window_set_win_tv ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
+void helia_window_set_win_tv ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 {
 	gtk_widget_hide ( GTK_WIDGET ( helia->bs_vbox ) );
 	gtk_widget_hide ( GTK_WIDGET ( helia->mp_vbox ) );
@@ -173,6 +173,9 @@ static void helia_window_create_player ( GtkBox *box, Helia *helia )
 	gtk_box_pack_start ( box, GTK_WIDGET ( helia_window_create_paned ( helia, TRUE ) ), TRUE, TRUE, 0 );
 
 	gtk_box_pack_end   ( box, GTK_WIDGET ( helia->slider ), FALSE, FALSE, 0 );
+
+	helia->slider->slider_signal_id = g_signal_connect ( helia->slider->slider, 
+		"value-changed", G_CALLBACK ( helia_player_slider_seek_changed ), helia );
 }
 
 static void helia_window_create_dtv ( GtkBox *box, Helia *helia )
@@ -294,4 +297,3 @@ HeliaWindow * helia_window_new ( Helia *helia )
 
 	return (HeliaWindow *)window;
 }
-

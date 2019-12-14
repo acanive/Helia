@@ -35,8 +35,10 @@ struct _IconFunc
 HeliaWindow * helia_window_new ( Helia *helia );
 GtkWindow * helia_create_window_top ( GtkWindow *base_window, const char *title, const char *icon, uint pos, gboolean modal );
 
-void helia_window_set_win_base ( G_GNUC_UNUSED GtkButton *button, Helia *helia );
-void helia_window_set_win_mp ( G_GNUC_UNUSED GtkButton *button, Helia *helia );
+void helia_window_set_win_mp   ( GtkButton *button, Helia *helia );
+void helia_window_set_win_tv   ( GtkButton *button, Helia *helia );
+void helia_window_set_win_base ( GtkButton *button, Helia *helia );
+
 GtkImage * helia_create_image ( const char *icon, uint size );
 GtkButton * helia_set_image_button ( const char *icon, uint size );
 void helia_create_image_button ( GtkBox *box, const char *icon, uint size, void (*f)(), Helia *helia );
@@ -71,7 +73,7 @@ HeliaTreeview * helia_treeview_new ( Helia *helia, gboolean mp_tv );
 
 char * helia_uri_get_path ( const char *uri ); // Returns a newly-allocated string holding the result. Free with free()
 void helia_treeview_add_channels ( Helia *helia, const char *file );
-void helia_treeview_add_arg ( GFile **files, int n_files, Helia *helia );
+void helia_treeview_add_start ( GFile **files, int n_files, Helia *helia );
 void helia_treeview_add_dir ( Helia *helia, const char *dir_path );
 void helia_treeview_add_file ( Helia *helia, const char *path, gboolean play );
 

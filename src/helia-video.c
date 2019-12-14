@@ -34,7 +34,7 @@ static void helia_video_draw_black ( GtkDrawingArea *widget, cairo_t *cr, const 
 		cairo_rectangle ( cr, 0, 0, width, heigh );
 
 		gdk_cairo_set_source_pixbuf ( cr, pixbuf,
-			( width / 2  ) - ( 128  / 2 ), ( heigh / 2 ) - ( 128 / 2 ) );
+			( width / 2  ) - ( size  / 2 ), ( heigh / 2 ) - ( size / 2 ) );
 
 		cairo_fill (cr);
 	}
@@ -231,23 +231,15 @@ static void helia_video_drag_in_mp ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDrag
 {
 	char **uris = gtk_selection_data_get_uris ( s_data );
 
-	uint c = 0;
-
-	for ( c = 0; uris[c] != NULL; c++ )
+	uint c = 0; for ( c = 0; uris[c] != NULL; c++ )
 	{
 		char *path = helia_uri_get_path ( uris[c] );
 
-		if ( path == NULL ) { g_debug ( "%s: file NULL", __func__ ); continue; }
-
-		if ( g_file_test ( path, G_FILE_TEST_IS_DIR ) )
-		{
+		if ( path && g_file_test ( path, G_FILE_TEST_IS_DIR ) )
 			helia_treeview_add_dir ( helia, path );
-		}
 
-		if ( g_file_test ( path, G_FILE_TEST_IS_REGULAR ) )
-		{
+		if ( path && g_file_test ( path, G_FILE_TEST_IS_REGULAR ) )
 			helia_treeview_add_file ( helia, path, ( c == 0 ) ? TRUE : FALSE );
-		}
 
 		free ( path );
 	}
@@ -262,18 +254,12 @@ static void helia_video_drag_in_tv ( G_GNUC_UNUSED GtkDrawingArea *draw, GdkDrag
 {
 	char **uris = gtk_selection_data_get_uris ( s_data );
 
-	uint c = 0;
-
-	for ( c = 0; uris[c] != NULL; c++ )
+	uint c = 0; for ( c = 0; uris[c] != NULL; c++ )
 	{
 		char *path = helia_uri_get_path ( uris[c] );
 
-		if ( path == NULL ) { g_debug ( "%s: file NULL", __func__ ); continue; }
-
-		if ( g_str_has_suffix ( path, "gtv-channel.conf" ) )
-		{
+		if ( path && g_str_has_suffix ( path, "gtv-channel.conf" ) )
 			helia_treeview_add_channels ( helia, path );
-		}
 
 		free ( path );
 	}
