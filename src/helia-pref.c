@@ -69,8 +69,6 @@ static void helia_pref_set_theme ( GtkEntry *entry, G_GNUC_UNUSED GtkEntryIconPo
 
 void helia_pref_read_config ( Helia *helia )
 {
-	gtk_icon_theme_add_resource_path ( gtk_icon_theme_get_default (), "/helia/data/icons" );
-
 	uint n = 0;
 	char *contents;
 
