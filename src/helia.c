@@ -119,6 +119,8 @@ static void helia_new_window ( GApplication *app, GFile **files, int n_files )
 {
 	Helia *helia = HELIA_APPLICATION ( app );
 
+	gtk_icon_theme_add_resource_path ( gtk_icon_theme_get_default (), "/helia/data/icons" );
+
 	if ( g_file_test ( helia->helia_conf, G_FILE_TEST_EXISTS ) ) helia_pref_read_config ( helia );
 
 	helia->video_mp = helia_video_new ( helia, TRUE );
