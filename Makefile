@@ -7,7 +7,7 @@
 #  G_MESSAGES_DEBUG=all build/helia
 
 program		= helia
-version		= 11.0
+version		= 12.0
 
 CC		= gcc
 COMMON		= -Wall -Wextra -Wpedantic

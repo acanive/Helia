@@ -79,6 +79,7 @@ struct _Helia
 	GDBusConnection *connect;
 
 	GtkBox *bs_vbox;
+	GtkBox *mn_vbox;
 	GtkBox *mp_vbox;
 	GtkBox *tv_vbox;
 	GtkBox *rec_vbox;
@@ -117,6 +118,8 @@ struct _Helia
 	double opacity_panel;
 	double opacity_window;
 
+	gboolean box_mp;
+	gboolean box_tv;
 	gboolean record_tv;
 	gboolean rec_enc_tv;
 	gboolean repeat;

@@ -121,7 +121,10 @@ static void helia_new_window ( GApplication *app, GFile **files, int n_files )
 
 	gtk_icon_theme_add_resource_path ( gtk_icon_theme_get_default (), "/helia/data/icons" );
 
-	if ( g_file_test ( helia->helia_conf, G_FILE_TEST_EXISTS ) ) helia_pref_read_config ( helia );
+	if ( g_file_test ( helia->helia_conf, G_FILE_TEST_EXISTS ) )
+		helia_pref_read_config ( helia );
+	else
+		g_object_set ( gtk_settings_get_default(), "gtk-application-prefer-dark-theme", helia->dark_theme, NULL );
 
 	helia->video_mp = helia_video_new ( helia, TRUE );
 	helia->video_tv = helia_video_new ( helia, FALSE );
@@ -164,6 +167,8 @@ static void helia_init ( Helia *helia )
 {
 	helia->pipeline_rec = NULL;
 
+	helia->box_mp = FALSE;
+	helia->box_tv = FALSE;
 	helia->power = TRUE;
 	helia->dark_theme = TRUE;
 	helia->cookie = 0;

@@ -94,13 +94,13 @@ void helia_pref_read_config ( Helia *helia )
 			}
 
 			if ( g_strrstr ( lines[n], "opacity-control" ) )
-				helia->opacity_panel = (double)( atoi ( key_val[1] ) ) / 100;
+				helia->opacity_panel = atof ( key_val[1] );
 
 			if ( g_strrstr ( lines[n], "opacity-equalizer" ) )
-				helia->opacity_eqav = (double)( atoi ( key_val[1] ) ) / 100;
+				helia->opacity_eqav = atof ( key_val[1] );
 
 			if ( g_strrstr ( lines[n], "opacity-window" ) )
-				helia->opacity_window = (double)( atoi ( key_val[1] ) ) / 100;
+				helia->opacity_window = atof ( key_val[1] );
 
 			if ( g_strrstr ( lines[n], "resize-icon" ) )
 				helia->icon_size = atoi ( key_val[1] );
@@ -112,10 +112,10 @@ void helia_pref_read_config ( Helia *helia )
 				helia->win_height = ( atoi ( key_val[1] ) );
 
 			if ( g_strrstr ( lines[n], "mp-volume" ) )
-				helia->volume_mp = (double)( atoi ( key_val[1] ) ) / 100;
+				helia->volume_mp = atof ( key_val[1] );
 
 			if ( g_strrstr ( lines[n], "tv-volume" ) )
-				helia->volume_tv = (double)( atoi ( key_val[1] ) ) / 100;
+				helia->volume_tv = atof ( key_val[1] );
 
 			if ( g_strrstr ( lines[n], "dark-theme" ) )
 			{
@@ -145,6 +145,13 @@ void helia_pref_read_config ( Helia *helia )
 
 		g_strfreev ( lines );
 		g_free ( contents );
+
+		if ( helia->opacity_panel  == 0 || helia->opacity_panel  > 1 ) helia->opacity_panel  = 0.75;
+		if ( helia->opacity_eqav   == 0 || helia->opacity_eqav   > 1 ) helia->opacity_eqav   = 0.75;
+		if ( helia->opacity_window == 0 || helia->opacity_window > 1 ) helia->opacity_window = 1.00;
+		if ( helia->volume_mp == 0 || helia->volume_mp > 1 ) helia->volume_mp = 0.5;
+		if ( helia->volume_tv == 0 || helia->volume_tv > 1 ) helia->volume_tv = 0.5;
+
 	}
 	else
 	{
@@ -161,11 +168,11 @@ void helia_pref_save_config ( Helia *helia )
 
 	g_string_append_printf ( gstring, "record-dir=%s\n",          helia->rec_dir  );
 	g_string_append_printf ( gstring, "gtk-theme-name=%s\n",      conf_t  );
-	g_string_append_printf ( gstring, "opacity-control=%d\n",     (uint)( helia->opacity_panel * 100 ) );
-	g_string_append_printf ( gstring, "opacity-equalizer=%d\n",   (uint)( helia->opacity_eqav  * 100 ) );
-	g_string_append_printf ( gstring, "opacity-window=%d\n",      (uint)( helia->opacity_window * 100 ) );
-	g_string_append_printf ( gstring, "mp-volume=%d\n",      	  (uint)( helia->volume_mp * 100 ) );
-	g_string_append_printf ( gstring, "tv-volume=%d\n",      	  (uint)( helia->volume_tv * 100 ) );
+	g_string_append_printf ( gstring, "opacity-control=%f\n",     helia->opacity_panel  );
+	g_string_append_printf ( gstring, "opacity-equalizer=%f\n",   helia->opacity_eqav   );
+	g_string_append_printf ( gstring, "opacity-window=%f\n",      helia->opacity_window );
+	g_string_append_printf ( gstring, "mp-volume=%f\n",      	  helia->volume_mp );
+	g_string_append_printf ( gstring, "tv-volume=%f\n",      	  helia->volume_tv );
 	g_string_append_printf ( gstring, "resize-icon=%d\n",         helia->icon_size );
 	g_string_append_printf ( gstring, "window-width=%d\n",        helia->win_width  );
 	g_string_append_printf ( gstring, "window-height=%d\n",       helia->win_height );

@@ -28,7 +28,7 @@ static void helia_about_win ( GtkWindow *window )
 	const char *license     = "This program is free software. \n\nGNU Lesser General Public License \nwww.gnu.org/licenses/lgpl.html";
 
 	gtk_about_dialog_set_program_name ( dialog, "Helia" );
-	gtk_about_dialog_set_version ( dialog, "11.0" );
+	gtk_about_dialog_set_version ( dialog, "12.0" );
 	gtk_about_dialog_set_license ( dialog, license );
 	gtk_about_dialog_set_authors ( dialog, authors );
 	gtk_about_dialog_set_artists ( dialog, artists );
@@ -86,6 +86,14 @@ void helia_window_set_win_base ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 
 void helia_window_set_win_mp ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 {
+	if ( !helia->box_mp )
+	{
+		gtk_box_pack_start ( helia->mn_vbox, GTK_WIDGET ( helia->mp_vbox ), TRUE, TRUE, 0 );
+		gtk_widget_show_all ( GTK_WIDGET ( helia->mp_vbox ) );
+		gtk_widget_hide ( GTK_WIDGET ( helia->search_entry_mp ) );
+		helia->box_mp = TRUE;
+	}
+
 	gtk_widget_hide ( GTK_WIDGET ( helia->bs_vbox ) );
 	gtk_widget_hide ( GTK_WIDGET ( helia->tv_vbox ) );
 	gtk_widget_show ( GTK_WIDGET ( helia->mp_vbox ) );
@@ -96,6 +104,14 @@ void helia_window_set_win_mp ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 
 void helia_window_set_win_tv ( G_GNUC_UNUSED GtkButton *button, Helia *helia )
 {
+	if ( !helia->box_tv )
+	{
+		gtk_box_pack_start ( helia->mn_vbox, GTK_WIDGET ( helia->tv_vbox ), TRUE, TRUE, 0 );
+		gtk_widget_show_all ( GTK_WIDGET ( helia->tv_vbox ) );
+		gtk_widget_hide ( GTK_WIDGET ( helia->search_entry_tv ) );
+		helia->box_tv = TRUE;
+	}
+
 	gtk_widget_hide ( GTK_WIDGET ( helia->bs_vbox ) );
 	gtk_widget_hide ( GTK_WIDGET ( helia->mp_vbox ) );
 	gtk_widget_show ( GTK_WIDGET ( helia->tv_vbox ) );
@@ -239,7 +255,7 @@ HeliaWindow * helia_window_new ( Helia *helia )
 
 	if ( pixbuf ) g_object_unref ( pixbuf );
 
-	GtkBox *mn_vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	helia->mn_vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 
 	helia->bs_vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 	helia->tv_vbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
@@ -247,7 +263,7 @@ HeliaWindow * helia_window_new ( Helia *helia )
 
 	gtk_container_set_border_width ( GTK_CONTAINER ( helia->bs_vbox ), 25 );
 
-	gtk_box_set_spacing ( mn_vbox, 10 );
+	gtk_box_set_spacing ( helia->mn_vbox, 10 );
 	gtk_box_set_spacing ( helia->bs_vbox, 10 );
 
 	GtkBox *bt_hbox = (GtkBox *)gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
@@ -274,24 +290,13 @@ HeliaWindow * helia_window_new ( Helia *helia )
 
 	gtk_box_pack_start ( helia->bs_vbox, GTK_WIDGET ( bc_hbox ), FALSE, FALSE, 0 );
 
-	gtk_box_pack_start ( mn_vbox, GTK_WIDGET ( helia->bs_vbox ), TRUE,  TRUE,  0 );
+	gtk_box_pack_start ( helia->mn_vbox, GTK_WIDGET ( helia->bs_vbox ), TRUE,  TRUE,  0 );
 
 	helia_window_create_player ( helia->mp_vbox, helia );
 	helia_window_create_dtv    ( helia->tv_vbox, helia );
 
-	gtk_box_pack_start ( mn_vbox, GTK_WIDGET ( helia->mp_vbox ), TRUE, TRUE, 0 );
-	gtk_box_pack_start ( mn_vbox, GTK_WIDGET ( helia->tv_vbox ), TRUE, TRUE, 0 );
-
-	gtk_container_add   ( GTK_CONTAINER ( window ), GTK_WIDGET ( mn_vbox ) );
+	gtk_container_add   ( GTK_CONTAINER ( window ), GTK_WIDGET ( helia->mn_vbox ) );
 	gtk_widget_show_all ( GTK_WIDGET ( window ) );
-
-	gtk_widget_hide ( GTK_WIDGET ( helia->mp_vbox ) );
-	gtk_widget_hide ( GTK_WIDGET ( helia->tv_vbox ) );
-
-	gtk_widget_hide ( GTK_WIDGET ( helia->search_entry_mp ) );
-	gtk_widget_hide ( GTK_WIDGET ( helia->search_entry_tv ) );
-
-	gtk_window_resize ( window, helia->win_width, helia->win_height );
 
 	gtk_widget_set_opacity ( GTK_WIDGET ( window ), helia->opacity_window );
 
