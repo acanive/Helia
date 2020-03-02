@@ -1,0 +1,22 @@
+diff --git a/tsdemux.c b/tsdemux.c
+index 0b36aaa..de44b4c 100644
+--- a/tsdemux.c
++++ b/tsdemux.c
+@@ -1047,7 +1047,7 @@ sink_query (MpegTSBase * base, GstQuery * query)
+   gboolean res = FALSE;
+ 
+   switch (GST_QUERY_TYPE (query)) {
+-    case GST_QUERY_BITRATE:{
++    /* case GST_QUERY_BITRATE:{
+       gint64 size_bytes;
+       GstClockTime duration;
+ 
+@@ -1066,7 +1066,7 @@ sink_query (MpegTSBase * base, GstQuery * query)
+         }
+       }
+       break;
+-    }
++    } */
+     default:
+       res = GST_MPEGTS_BASE_CLASS (parent_class)->sink_query (base, query);
+       break;
