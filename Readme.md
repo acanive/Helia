@@ -12,6 +12,6 @@
   * [Scrambling](gst#scrambling)
 
 
-## Clone [Helia-light](https://github.com/vl-nix/helia-light)
+## [Helia-light](https://github.com/vl-nix/helia-light)
 
 * git clone git@github.com:vl-nix/helia-light.git
