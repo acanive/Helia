@@ -6,8 +6,7 @@
 
 * Digital TV ( Only Linux )
   * Record: Ts / Encoding
-  * Scan: DVB ( DVB-T/T2, DVB-S/S2, DVB-C )
-    * Convert ( DVB, ATSC, DTMB, ISDB ): [DVBv5](https://www.linuxtv.org/docs/libdvbv5/index.html) ⇨ [GstDvbSrc](https://gstreamer.freedesktop.org/documentation/dvb/dvbsrc.html#dvbsrc)
+  * Scan: DVB, DTMB ( DVB-T/T2, DVB-S/S2, DVB-C )
   * [Multifrontend](gst#multifrontend)
   * [Scrambling](gst#scrambling)
 
